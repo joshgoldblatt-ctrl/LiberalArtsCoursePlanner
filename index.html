@@ -1,0 +1,1001 @@
+<!--
+================================================================================
+  App:          LaGuardia Liberal Arts Course Planner App
+  Version:      Prototype
+  Released:     October 16, 2026
+  Developed by: Josh Goldblatt using Claude
+================================================================================
+  CHANGELOG (most recent first)
+--------------------------------------------------------------------------------
+  Prototype  2026-10-16
+    - Initial prototype.
+    - Plan tab: requirement form for the Liberal Arts: Social Science &
+      Humanities major covering Program Core (1 course from 5 of 6
+      categories), Pathways Flexible Core (one course in each of 5 categories
+      plus one additional), and Liberal Arts Electives funded by freed credits.
+    - Course entry box: pick a course (autocomplete on code or title), set
+      status and term, then click Add course; or paste
+      a list of codes from a transcript. The app places each course in the
+      first open requirement that fits (Program Core category, then an
+      elective row if freed credits allow, then a Flexible Core row). Courses
+      outside the three requirements are reported, not added.
+    - Double-count logic: a Program Core course that carries a Flexible Core
+      code (CE, IS, SW, US, WC) automatically fills the matching Flexible Core
+      row (or the "additional" row if that category is already filled) and
+      frees 3 elective credits, up to 15. A third course in an already-filled
+      category is flagged as freeing nothing. Manual Flexible Core picks that
+      are Section I courses also auto-fill the matching Program Core row.
+    - Sixth Program Core category: when all six categories are filled, the
+      sixth pick (by order chosen) is treated as an elective paid for with
+      freed credits and does not itself free credits.
+    - Electives with a Flexible Core code fill an open Flexible Core row but
+      free no further credits.
+    - Per-course status pill (blank by default; Planned = empty box,
+      In Progress = box with squiggle, Completed = green checked box) and a
+      term field. Status and term belong to the course, so they can be edited
+      from any row the course appears in. Green is reserved for Completed;
+      course-column badges use teal, gold, and red only.
+    - Course info popover (credits, pre/co-requisites, Flexible Core category,
+      CUNY catalog link) and a Course Lists tab with search and filters.
+    - Suggestions panel listing Program Core courses that would fill the
+      still-open Flexible Core categories, plus an "Additional course" group
+      for courses whose code category is already filled.
+    - Plan auto-saves to the browser (localStorage); export/import as JSON;
+      print-friendly layout.
+    - Data sources: program sheet "Liberal Arts Soc Sci and Hum Electives"
+      (3.26.26), Degree Map Prereq Course List Table (August 2026), Course Link
+      Table (July 2026). Flexible Core designations for courses outside the
+      major come from the catalog table's Designation column (FWGR/FUSR/FCER/
+      FISR/FSWR). Program-sheet codes HUC150, HUC270, HUC238, HUC240,
+      SSD-BTC105, SSN-HUN180 are shown under their catalog codes HUV150,
+      HUV270, HUV238, HUV240, BTC105, HUN180. ENN193/SSN193 and ENG238/HUV238
+      are treated as the same course. FC*1000 transfer placeholders omitted.
+    - Open data questions (not yet ruled on): seven program-sheet courses with
+      no code on the sheet but a Flexible Core designation in the catalog
+      table (ELI101, HUV150, HUV270, HUC140, HUV238, SSJ101, HUN180) currently
+      use the catalog designation.
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaGuardia Liberal Arts Course Planner App Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#22253a;--ink-soft:#565b76;--ink-faint:#8b8fa6;
+  --paper:#f7f4ee;--card:#ffffff;--line:#e4dfd4;
+  --accent:#b5482e;--accent-dark:#9c3c25;--accent-soft:#f3ddd6;
+  --teal:#2e6e72;--teal-soft:#d9e8e8;
+  --gold:#c8922c;--gold-deep:#8a6516;--gold-soft:#f4ecd9;
+  --green:#3f7d57;--green-soft:#dcecdf;
+  --radius:12px;
+  --shadow:0 1px 2px rgba(34,37,58,.06), 0 6px 18px -8px rgba(34,37,58,.12);
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Source Sans 3', 'Segoe UI', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--paper);color:var(--ink);font-size:15.5px;line-height:1.55;
+  background-image:radial-gradient(circle at 12% -10%, rgba(181,72,46,.05), transparent 40%),
+                   radial-gradient(circle at 95% 0%, rgba(46,110,114,.05), transparent 35%)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4vw,42px);line-height:1.05;letter-spacing:-.5px}
+h1 .accent{color:var(--accent)}
+h2{font-family:var(--font-display);font-weight:600;font-size:24px;line-height:1.1;letter-spacing:-.2px}
+h3{font-family:var(--font-display);font-weight:600;font-size:18px;line-height:1.15}
+h4{font-family:var(--font-body);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft)}
+.lead{font-size:17px;color:var(--ink-soft);line-height:1.55;max-width:720px}
+.muted{color:var(--ink-faint)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+header{padding:38px 0 0}
+.brand-row{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:18px;border-bottom:3px solid var(--ink);padding-bottom:22px}
+.subtitle{color:var(--ink-soft);margin-top:9px;max-width:640px;font-size:16px;line-height:1.5}
+.meta-box{font-size:12.5px;color:var(--ink-soft);line-height:1.7;display:grid;grid-template-columns:auto auto;gap:0 10px;align-content:end}
+.meta-box b{color:var(--ink);font-weight:600;text-align:right}
+.meta-box span{white-space:nowrap}
+.tabs{display:flex;gap:6px;margin:26px 0 30px;flex-wrap:wrap}
+.tab-btn{font-family:var(--font-body);font-weight:600;font-size:15px;border:1.5px solid var(--line);background:var(--card);color:var(--ink-soft);padding:10px 22px;border-radius:999px;cursor:pointer;transition:.18s}
+.tab-btn:hover{border-color:var(--ink-faint);color:var(--ink)}
+.tab-btn.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.view{display:none}.view.active{display:block}
+.btn{font-family:var(--font-body);font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:7px;padding:9px 20px;border-radius:999px;border:1.5px solid transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover:not(:disabled){background:var(--accent-dark);border-color:var(--accent-dark)}
+.btn-secondary{background:none;color:var(--accent);border-color:var(--accent)}
+.btn-secondary:hover:not(:disabled){background:var(--accent);color:#fff}
+.btn-neutral{background:none;color:var(--ink-soft);border-color:var(--line)}
+.btn-neutral:hover:not(:disabled){border-color:var(--ink-faint);color:var(--ink)}
+.btn-sm{padding:6px 14px;font-size:12.5px}
+.field label,.f-group label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);margin-bottom:4px}
+.field input,.field select,.field textarea,.f-group select,.f-group input,select.ctl,input.ctl,textarea.ctl{
+  width:100%;font-family:var(--font-body);font-size:14px;padding:8px 11px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.field textarea,textarea.ctl{min-height:92px;resize:vertical;line-height:1.5}
+.field input:focus,.field select:focus,.field textarea:focus,.f-group select:focus,.f-group input:focus,select.ctl:focus,input.ctl:focus,textarea.ctl:focus{outline:none;border-color:var(--accent)}
+/* course-column badges: teal / gold / red / muted only (green is reserved for Completed status) */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;letter-spacing:.03em;padding:3px 10px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
+.badge.info{background:var(--teal-soft);color:var(--teal)}
+.badge.warn{background:var(--gold-soft);color:var(--gold-deep)}
+.badge.danger{background:var(--accent-soft);color:var(--accent)}
+.badge.muted{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line)}
+/* status pills */
+.spill{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-body);font-size:12.5px;font-weight:600;padding:5px 12px 5px 9px;border-radius:999px;border:1.5px dashed var(--line);background:#fff;color:var(--ink-faint);cursor:pointer;transition:.15s;white-space:nowrap;line-height:1.2}
+.spill:hover{border-color:var(--ink-faint);color:var(--ink-soft)}
+.spill svg{width:15px;height:15px;flex:none}
+.spill.planned{border:1.5px solid var(--ink-faint);color:var(--ink-soft);background:#fff}
+.spill.progress{border:1.5px solid var(--ink);color:#fff;background:var(--ink)}
+.spill.complete{border:1.5px solid var(--green);color:var(--green);background:var(--green-soft)}
+.spill[disabled]{opacity:.35;cursor:default}
+.smenu{position:absolute;z-index:60;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px -8px rgba(34,37,58,.3);padding:6px;display:none;min-width:170px}
+.smenu.open{display:block}
+.smenu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-family:var(--font-body);font-size:13.5px;font-weight:600;padding:8px 10px;border:none;background:none;border-radius:7px;color:var(--ink);cursor:pointer}
+.smenu button:hover{background:var(--paper)}
+.smenu button svg{width:16px;height:16px}
+.smenu button.clear{color:var(--ink-faint);font-weight:500;border-top:1px solid var(--line);border-radius:0;margin-top:4px;padding-top:9px}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);background:var(--card)}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:700;padding:10px 14px;border-bottom:2px solid var(--line);background:var(--paper);white-space:nowrap}
+.tbl tbody td{padding:10px 14px;border-bottom:1px solid var(--line);color:var(--ink-soft);vertical-align:top}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover{background:var(--paper)}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:26px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.stat.teal::before{background:var(--teal)}
+.stat.gold::before{background:var(--gold)}
+.stat.ink::before{background:var(--ink)}
+.stat .num{font-family:var(--font-display);font-size:36px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stat .num small{font-size:18px;color:var(--ink-faint);font-weight:600}
+.stat .lbl{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-top:6px;font-weight:600}
+.stat .sub{font-size:12.5px;color:var(--ink-faint);margin-top:4px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 26px;margin-bottom:26px}
+.panel h2{font-size:21px;margin-bottom:4px}
+.panel .note{font-size:13px;color:var(--ink-faint);margin-bottom:18px}
+.panel-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.panel-head .prog{font-family:var(--font-display);font-size:20px;font-weight:600;white-space:nowrap}
+.panel-head .prog.done{color:var(--green)}
+.student-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.student-grid .field{margin:0;max-width:none}
+/* course entry */
+.entry-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) auto minmax(150px,.8fr) auto;gap:10px;align-items:end}
+@media (max-width:860px){.entry-grid{grid-template-columns:1fr 1fr}}
+.entry-grid .field{margin:0;max-width:none}
+.ac-wrap{position:relative}
+#acInput.picked{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
+.ac{position:absolute;z-index:40;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px -8px rgba(34,37,58,.3);max-height:300px;overflow:auto;display:none}
+.ac.open{display:block}
+.ac div{padding:8px 12px;font-size:13.5px;cursor:pointer;display:flex;gap:10px;align-items:baseline;border-bottom:1px solid var(--line)}
+.ac div:last-child{border-bottom:none}
+.ac div:hover,.ac div.hi{background:var(--paper)}
+.ac b{color:var(--ink);min-width:64px;font-weight:700}
+.ac .t{flex:1;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac .none{color:var(--ink-faint);font-style:italic;cursor:default}
+.paste-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-top:12px}
+@media (max-width:860px){.paste-row{grid-template-columns:1fr}}
+.paste-row .field{margin:0;max-width:none}
+.paste-row textarea{min-height:58px}
+.entry-log{margin-top:12px;font-size:13.5px}
+.entry-log ul{list-style:none}
+.entry-log li{padding:5px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.entry-log li:first-child{border-top:none}
+.entry-log li b{min-width:70px;color:var(--ink)}
+.entry-log li .where{color:var(--ink-soft)}
+.entry-log li .where.bad{color:var(--accent)}
+.entry-log li .where.dup{color:var(--gold-deep)}
+.entry-toggle{font-size:12.5px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:var(--font-body);font-weight:600;padding:0}
+/* requirement rows */
+.req{display:grid;grid-template-columns:minmax(150px,200px) minmax(220px,1fr) 140px 118px 34px;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.req:first-of-type{border-top:none}
+.req .rl{font-weight:600;font-size:14px;line-height:1.3}
+.req .rl small{display:block;font-weight:500;color:var(--ink-faint);font-size:12px}
+.req .rl .code{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--teal);text-transform:uppercase}
+.req .rmain{min-width:0}
+.req .rtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.req select.ctl.auto{background:var(--teal-soft);border-color:var(--teal-soft);color:var(--teal);font-weight:600}
+.req.done .rl{color:var(--teal)}
+.req .ibtn{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s}
+.req .ibtn:hover{border-color:var(--accent);color:var(--accent)}
+.req .ibtn[disabled]{opacity:.3;cursor:default}
+.req .pv{display:none}
+.other-box{display:grid;grid-template-columns:120px 1fr;gap:8px;margin-top:8px}
+@media (max-width:860px){
+  .req{grid-template-columns:1fr 1fr;grid-template-areas:"lbl lbl" "main main" "status term" "info info"}
+  .req .rl{grid-area:lbl}.req .rmain{grid-area:main}.req .rstatus{grid-area:status}.req .rterm{grid-area:term}.req .ibtn{grid-area:info;justify-self:start}
+}
+.rowhead{display:grid;grid-template-columns:minmax(150px,200px) minmax(220px,1fr) 140px 118px 34px;gap:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);padding:0 0 6px}
+@media (max-width:860px){.rowhead{display:none}}
+.empty-row{font-size:14px;color:var(--ink-faint);font-style:italic;padding:8px 0}
+.callout{border-left:4px solid var(--gold);background:var(--gold-soft);color:var(--gold-deep);border-radius:8px;padding:10px 14px;font-size:13.5px;margin:10px 0 14px}
+.callout.teal{border-left-color:var(--teal);background:var(--teal-soft);color:var(--teal)}
+.callout.red{border-left-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.callout.green{border-left-color:var(--green);background:var(--green-soft);color:var(--green)}
+/* suggestions */
+.sug-cat{margin-bottom:12px}
+.sug-cat h4{margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.chip{font-size:12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:2px 9px;color:var(--ink-soft);cursor:pointer;transition:.12s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip b{color:var(--ink);font-weight:600}
+.chip .fc{color:var(--teal);font-weight:700;font-size:11px;margin-left:4px}
+.chip.more{cursor:pointer;color:var(--accent);border-style:dashed}
+.sug-group{font-size:12px;color:var(--ink-faint);margin:6px 0 3px}
+/* popover */
+.pop{position:absolute;z-index:50;width:min(380px,calc(100vw - 40px));background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px -8px rgba(34,37,58,.3);padding:16px 18px;font-size:13.5px;display:none}
+.pop.open{display:block}
+.pop h3{margin-bottom:2px}
+.pop .pc{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--teal);text-transform:uppercase}
+.pop dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:10px}
+.pop dt{color:var(--ink-faint);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+.pop dd{color:var(--ink-soft)}
+.pop .close{position:absolute;top:8px;right:10px;border:none;background:none;font-size:18px;color:var(--ink-faint);cursor:pointer}
+.pop .src{font-size:12px;color:var(--ink-faint);margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 22px}
+.toolbar .spacer{flex:1}
+.saved{font-size:12.5px;color:var(--ink-faint)}
+/* filter bar */
+.filterbar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:22px}
+.filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px}
+.filter-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap}
+.result-count{font-size:14px;font-weight:600}
+.result-count b{color:var(--accent)}
+.pill{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 11px;border-radius:999px;white-space:nowrap}
+.pill.flex{background:var(--teal-soft);color:var(--teal)}
+.pill.core{background:var(--accent-soft);color:var(--accent)}
+.pill.elec{background:var(--gold-soft);color:var(--gold-deep)}
+.pill.none{background:var(--paper);color:var(--ink-faint);border:1px solid var(--line)}
+.help p{margin-bottom:12px;max-width:760px}
+.help ul,.help ol{margin:0 0 14px 22px;max-width:760px}
+.help li{margin-bottom:6px}
+.empty-state{text-align:center;padding:40px 20px;color:var(--ink-faint)}
+/* print */
+.print-only{display:none}
+@media print{
+  body{background:#fff;font-size:12px}
+  .wrap{padding:0;max-width:none}
+  .no-print,.tabs,.toolbar,.ibtn,.filterbar,.chips,.callout.teal,.ac,.smenu{display:none !important}
+  .view{display:none}.view.active{display:block}
+  .panel,.stat,.table-wrap{box-shadow:none;break-inside:avoid}
+  .req{grid-template-columns:150px 1fr 110px 90px 0;padding:5px 0}
+  .req select.ctl,.req input.ctl,.req .other-box{display:none}
+  .req .pv{display:block;font-size:12px}
+  .spill{border-style:solid}
+  .stat .num{font-size:24px}
+  header{padding-top:0}
+  .print-only{display:block}
+  a[href]::after{content:""}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand-row">
+      <div>
+        <h1>LaGuardia <span class="accent">Liberal Arts</span> Course Planner</h1>
+        <p class="subtitle">Plan the Program Core, Pathways Flexible Core, and electives for the Liberal Arts: Social Science &amp; Humanities major. The planner shows when one course meets both a major and a general-education requirement and frees elective credits.</p>
+      </div>
+      <div class="meta-box">
+        <b>Version:</b><span>Prototype</span>
+        <b>Released:</b><span>October 16, 2026</span>
+        <b>Developed by:</b><span>Josh Goldblatt using Claude</span>
+      </div>
+    </div>
+    <nav class="tabs no-print">
+      <button class="tab-btn active" data-view="plan">Plan</button>
+      <button class="tab-btn" data-view="lists">Course Lists</button>
+      <button class="tab-btn" data-view="help">How It Works</button>
+    </nav>
+  </header>
+
+  <!-- ============================ PLAN ============================ -->
+  <section class="view active" id="view-plan">
+    <div class="toolbar no-print">
+      <button class="btn btn-primary btn-sm" id="btnPrint">Print plan</button>
+      <button class="btn btn-secondary btn-sm" id="btnExport">Export plan</button>
+      <button class="btn btn-secondary btn-sm" id="btnImport">Import plan</button>
+      <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
+      <span class="spacer"></span>
+      <span class="saved" id="savedNote">Changes save automatically in this browser.</span>
+      <button class="btn btn-neutral btn-sm" id="btnClear">Clear plan</button>
+    </div>
+
+    <div class="panel">
+      <div class="student-grid">
+        <div class="field"><label>Student name</label><input type="text" id="stName" placeholder="Last, First"></div>
+        <div class="field"><label>EMPLID</label><input type="text" id="stId" placeholder="8 digits"></div>
+        <div class="field"><label>Advisor</label><input type="text" id="stAdvisor" placeholder="Advisor name"></div>
+        <div class="field"><label>Plan date</label><input type="date" id="stDate"></div>
+      </div>
+    </div>
+
+    <div class="panel no-print" id="panelEntry">
+      <h2>Add courses</h2>
+      <div class="note">Enter courses the student has taken, is taking, or plans to take. Pick a course, set its status and term, then click Add course. Each one is placed in the first open requirement that fits: its Program Core category, then an elective row if freed credits allow, then a Flexible Core row. Only courses that meet one of the three requirements are accepted.</div>
+      <div class="entry-grid">
+        <div class="field ac-wrap"><label>Course</label><input type="text" id="acInput" placeholder="Type a course code or title…" autocomplete="off"><div class="ac" id="acList"></div></div>
+        <div class="field"><label>Status</label><div id="entryStatus"></div></div>
+        <div class="field"><label>Term</label><input type="text" id="entryTerm" placeholder="e.g., Fall 2026"></div>
+        <div class="field"><label>&nbsp;</label><button class="btn btn-primary" id="btnAddOne">Add course</button></div>
+      </div>
+      <div style="margin-top:12px"><button class="entry-toggle" id="pasteToggle">Paste a list of courses instead…</button></div>
+      <div class="paste-row" id="pasteRow" style="display:none">
+        <div class="field"><label>Course codes</label><textarea class="ctl" id="pasteBox" placeholder="Paste from a transcript or advising notes, e.g. ELS101, SSH101, HUP101. Any text is fine; the app picks out course codes and applies the status and term above."></textarea></div>
+        <button class="btn btn-secondary" id="btnAddMany">Add all</button>
+      </div>
+      <div class="entry-log" id="entryLog"></div>
+    </div>
+
+    <div class="stat-grid" id="stats"></div>
+
+    <div class="panel" id="panelCore">
+      <div class="panel-head">
+        <div><h2>Program Core</h2><div class="note">Choose one course from 5 of the 6 categories (15 credits). A code after the course (CE, IS, SW, US, WC) means it also counts for the Flexible Core and frees 3 elective credits.</div></div>
+        <div class="prog" id="progCore"></div>
+      </div>
+      <div id="coreCallouts"></div>
+      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div id="coreRows"></div>
+    </div>
+
+    <div class="panel" id="panelFlex">
+      <div class="panel-head">
+        <div><h2>Pathways Flexible Core</h2><div class="note">Six courses: one from each of the five categories plus one more from any category. Rows filled automatically from a Program Core pick are shaded teal; you can choose a different course for any row.</div></div>
+        <div class="prog" id="progFlex"></div>
+      </div>
+      <div id="flexCallouts"></div>
+      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div id="flexRows"></div>
+    </div>
+
+    <div class="panel" id="panelElec">
+      <div class="panel-head">
+        <div><h2>Liberal Arts Electives</h2><div class="note">Each Program Core course that also meets a Flexible Core requirement frees 3 credits, up to 15. Freed credits can go to any course in Section I or Section 2 of the program sheet.</div></div>
+        <div class="prog" id="progElec"></div>
+      </div>
+      <div id="elecCallouts"></div>
+      <div class="rowhead" id="elecHead"><span>Elective</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div id="elecRows"></div>
+    </div>
+
+    <div class="panel no-print" id="panelSug">
+      <h2>Suggestions</h2>
+      <div class="note">Program Core courses that would fill the Flexible Core rows still open, grouped by Program Core category not yet used. Click a course to add it to the plan.</div>
+      <div id="sugBody"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Notes</h2>
+      <div class="note">Advising notes, transfer credits, or anything else to remember. Included when you print or export.</div>
+      <div class="field" style="max-width:none"><textarea id="stNotes" placeholder="Notes…"></textarea></div>
+      <div class="print-only" id="notesPrint"></div>
+    </div>
+    <p class="print-only muted" style="font-size:11px">Planning tool only. Confirm requirements with an advisor and the official degree audit. Questions: liberalarts@lagcc.cuny.edu</p>
+  </section>
+
+  <!-- ============================ LISTS ============================ -->
+  <section class="view" id="view-lists">
+    <div class="filterbar">
+      <div class="filter-grid">
+        <div class="f-group"><label>Search</label><input type="text" id="lsSearch" placeholder="Code or title…"></div>
+        <div class="f-group"><label>List</label><select id="lsSection">
+          <option value="">Section I and Section 2</option>
+          <option value="1">Section I: Program Core</option>
+          <option value="2">Section 2: Additional Electives</option>
+          <option value="0">Flexible Core courses outside the major</option>
+          <option value="all">Everything</option>
+        </select></div>
+        <div class="f-group"><label>Category</label><select id="lsCat"></select></div>
+        <div class="f-group"><label>Flexible Core</label><select id="lsFlex">
+          <option value="">Any</option>
+          <option value="has">Has a Flexible Core code</option>
+          <option value="none">No Flexible Core code</option>
+          <option value="WC">WC: World Cultures &amp; Global Issues</option>
+          <option value="US">US: U.S. Experience in Its Diversity</option>
+          <option value="SW">SW: Scientific World</option>
+          <option value="IS">IS: Individual &amp; Society</option>
+          <option value="CE">CE: Creative Expression</option>
+        </select></div>
+      </div>
+      <div class="filter-foot">
+        <div class="result-count" id="lsCount"></div>
+        <button class="btn btn-secondary btn-sm" id="lsClear">Clear filters</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Course</th><th>Title</th><th>List</th><th>Flex Core</th><th class="num">Credits</th><th>Pre/Co-requisites</th><th>Catalog</th></tr></thead>
+        <tbody id="lsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================ HELP ============================ -->
+  <section class="view help" id="view-help">
+    <div class="panel">
+      <h2>How the planner works</h2>
+      <div class="note">Rules as stated on the Liberal Arts: Social Science &amp; Humanities program sheet.</div>
+      <h3 style="margin-bottom:8px">The three requirements</h3>
+      <ul>
+        <li><b>Program Core.</b> One course from 5 of the 6 categories: Modern Language or Literature, English Literature, Philosophy, Humanities, Social Sciences, History.</li>
+        <li><b>Pathways Flexible Core.</b> Six courses: one from each of World Cultures &amp; Global Issues (WC), U.S. Experience in Its Diversity (US), Scientific World (SW), Individual &amp; Society (IS), Creative Expression (CE), plus one more from any category.</li>
+        <li><b>Liberal Arts Electives.</b> Each time a Program Core course also satisfies a Flexible Core category, 3 elective credits are freed, up to 15. Freed credits can be used for any Section I or Section 2 course.</li>
+      </ul>
+      <h3 style="margin-bottom:8px">Two ways to build a plan</h3>
+      <ul>
+        <li><b>Add courses.</b> Type a course or paste a list of codes. Each course goes to the first open requirement that fits: its Program Core category; otherwise an elective row if freed credits allow; otherwise a Flexible Core row matching its code (or the additional row). A course that fits nowhere is reported and not added. Courses outside these three requirements (ENG101, MAT115, and so on) are not accepted.</li>
+        <li><b>Pick by row.</b> Use the dropdown in any requirement row. Dropdowns list only courses that fit that row.</li>
+      </ul>
+      <h3 style="margin-bottom:8px">What the planner does automatically</h3>
+      <ol>
+        <li>When a Program Core course carries a Flexible Core code, the matching Flexible Core row fills in (teal shading). If that category is already filled, the course goes to the <i>Additional course</i> row instead. If both are full, the course still counts for the major but frees no credits, and the row says so.</li>
+        <li>Each double-count adds an elective row. If you change a pick and lose a freed credit, any elective you already chose stays on the plan with a warning rather than disappearing.</li>
+        <li>If you pick a Section I course directly in a Flexible Core row, the planner also fills the matching Program Core category when it is open.</li>
+        <li>If you fill all six Program Core categories, the sixth course you chose is treated as an elective paid with freed credits. It can fill an open Flexible Core row but frees no credits itself.</li>
+        <li>An elective with a Flexible Core code fills an open Flexible Core row but frees no further credits.</li>
+        <li>A course can appear only once in the plan. Cross-listed pairs (ENN193/SSN193, ENG238/HUV238) count as one course.</li>
+      </ol>
+      <h3 style="margin-bottom:8px">Status and term</h3>
+      <p>Each course has a status pill (blank until set) and a term. Click the pill to choose Planned, In Progress, or Completed, or to clear it. Status and term belong to the course, so a course that appears in two rows shows the same values in both and can be edited from either.</p>
+      <h3 style="margin-bottom:8px">Saving, sharing, printing</h3>
+      <p>The plan saves itself in this browser as you work. Use <b>Export plan</b> to download a file you can email to a student or advisor, and <b>Import plan</b> to load one. <b>Print plan</b> produces a clean summary.</p>
+      <h3 style="margin-bottom:8px">Data sources and notes</h3>
+      <ul>
+        <li>Course lists and Flexible Core codes: program sheet <i>Liberal Arts Soc Sci and Hum Electives</i> (3.26.26).</li>
+        <li>Credits, pre/co-requisites, and Flexible Core designations for courses outside the major: Degree Map Prereq Course List Table (August 2026).</li>
+        <li>Catalog links: Course Link Table (July 2026).</li>
+        <li>Seven program-sheet courses carry no code on the sheet but are designated Flexible Core in the catalog table; the planner uses the catalog designation and says so in the course info popover: ELI101 (WC), HUV150 (WC), HUV270 (US), HUC140 (CE), HUV238 (CE), SSJ101 (US), HUN180 (US).</li>
+        <li>Program-sheet codes HUC150, HUC270, HUC238, HUC240, SSD-BTC105, and SSN-HUN180 appear here under their catalog codes HUV150, HUV270, HUV238, HUV240, BTC105, and HUN180.</li>
+        <li>ENG208 Introduction to Digital Journalism is on the program sheet but not in the catalog table, so it has no credit or prerequisite details.</li>
+        <li>Five catalog placeholder entries used for transfer credit (FCCE1000, FCIS1000, FCSW1000, FCUS1000, FCWG1000) are left out. Use <i>Other course not listed</i> in a Flexible Core row for transfer credit.</li>
+      </ul>
+      <p class="muted" style="font-size:13px">Planning tool only. Confirm requirements with an advisor and the official degree audit. Questions: <a href="mailto:liberalarts@lagcc.cuny.edu">liberalarts@lagcc.cuny.edu</a></p>
+    </div>
+  </section>
+</div>
+
+<div class="pop" id="pop"><button class="close" id="popClose" aria-label="Close">&times;</button><div id="popBody"></div></div>
+<div class="smenu" id="smenu"></div>
+
+<script>
+/* ===================== DATA ===================== */
+const RAW = [{"c":"ELA101","t":"Elementary Arabic 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754101","f":"WC","fs":"sheet"},{"c":"ELA102","t":"Elementary Arabic 2","s":1,"k":"1","cr":3,"p":"","id":"0754111","f":"WC","fs":"sheet"},{"c":"ELA103","t":"Intermediate Arabic 1","s":1,"k":"1","cr":3,"p":"","id":"1283531","f":"WC","fs":"sheet"},{"c":"ELA104","t":"Intermediate Arabic 2","s":1,"k":"1","cr":3,"p":"","id":"1453331"},{"c":"ELA105","t":"Arabic for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"1295911","f":"WC","fs":"sheet"},{"c":"ELA201","t":"Modern Arabic Literature","s":1,"k":"1","cr":3,"p":"","id":"0754121","f":"WC","fs":"sheet"},{"c":"ELC101","t":"Elementary Modern Chinese 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754161","f":"WC","fs":"sheet"},{"c":"ELC102","t":"Elementary Modern Chinese 2","s":1,"k":"1","cr":3,"p":"","id":"0754171","f":"WC","fs":"sheet"},{"c":"ELC103","t":"Intermediate Chinese","s":1,"k":"1","cr":3,"p":"","id":"0754181","f":"WC","fs":"sheet"},{"c":"ELC104","t":"Intermediate Chinese 2","s":1,"k":"1","cr":3,"p":"","id":"1453341"},{"c":"ELC105","t":"Chinese for Heritage Students","s":1,"k":"1","cr":3,"p":"","id":"0754191","f":"WC","fs":"sheet"},{"c":"ELC106","t":"Chinese for Heritage Speakers 2","s":1,"k":"1","cr":3,"p":"","id":"1244391","f":"WC","fs":"sheet"},{"c":"ELC201","t":"Modern Chinese Literature","s":1,"k":"1","cr":3,"p":"","id":"0754201","f":"WC","fs":"sheet"},{"c":"ELC202","t":"Contemporary Chinese Literature","s":1,"k":"1","cr":3,"p":"","id":"1092781"},{"c":"ELC203","t":"Classic Chinese Literature","s":1,"k":"1","cr":3,"p":"","id":"1092791","f":"WC","fs":"sheet"},{"c":"ELF101","t":"Elementary French 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754271","f":"WC","fs":"sheet"},{"c":"ELF102","t":"Elementary French 2","s":1,"k":"1","cr":3,"p":"","id":"0754281","f":"WC","fs":"sheet"},{"c":"ELF103","t":"Intermediate French 1","s":1,"k":"1","cr":3,"p":"","id":"0754291","f":"WC","fs":"sheet"},{"c":"ELF104","t":"Intermediate French 2","s":1,"k":"1","cr":3,"p":"","id":"1453361"},{"c":"ELF105","t":"French for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"0754301","f":"WC","fs":"sheet"},{"c":"ELF201","t":"French Lit from a Global Perspective","s":1,"k":"1","cr":3,"p":"","id":"0754311","f":"WC","fs":"sheet"},{"c":"ELI101","t":"Elementary Italian 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754341","f":"WC","fs":"catalog"},{"c":"ELI102","t":"Elementary Italian 2","s":1,"k":"1","cr":3,"p":"","id":"0754351","f":"WC","fs":"sheet"},{"c":"ELI103","t":"Intermediate Italian 1","s":1,"k":"1","cr":3,"p":"","id":"1092801","f":"WC","fs":"sheet"},{"c":"ELI104","t":"Intermediate Italian 2","s":1,"k":"1","cr":3,"p":"","id":"1453351"},{"c":"ELJ101","t":"Elem Japanese 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754361","f":"WC","fs":"sheet"},{"c":"ELJ102","t":"Elem Japanese 2","s":1,"k":"1","cr":3,"p":"","id":"0754371","f":"WC","fs":"sheet"},{"c":"ELJ103","t":"Intermediate Japanese 1","s":1,"k":"1","cr":3,"p":"","id":"0754381","f":"WC","fs":"sheet"},{"c":"ELJ104","t":"Intermediate Japanese 2","s":1,"k":"1","cr":3,"p":"","id":"1157781","f":"WC","fs":"sheet"},{"c":"ELJ105","t":"Japanese for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"1184701","f":"WC","fs":"sheet"},{"c":"ELJ201","t":"Modern Japanese Literature","s":1,"k":"1","cr":3,"p":"","id":"0754391","f":"IS","fs":"sheet"},{"c":"ELK101","t":"Elementary Korean 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754401","f":"WC","fs":"sheet"},{"c":"ELK102","t":"Elementary Korean 2","s":1,"k":"1","cr":3,"p":"","id":"0754411","f":"WC","fs":"sheet"},{"c":"ELK103","t":"Intermediate Korean 1","s":1,"k":"1","cr":3,"p":"","id":"0754421","f":"WC","fs":"sheet"},{"c":"ELK104","t":"Intermediate Korean 2","s":1,"k":"1","cr":3,"p":"","id":"1453321"},{"c":"ELK105","t":"Korean for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"0754431","f":"WC","fs":"sheet"},{"c":"ELM101","t":"American Sign Language 1","s":1,"k":"1","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0754481","f":"WC","fs":"sheet"},{"c":"ELM102","t":"American Sign Language 2","s":1,"k":"1","cr":3,"p":"","id":"0754491","f":"WC","fs":"sheet"},{"c":"ELM103","t":"American Sign Language 3","s":1,"k":"1","cr":3,"p":"","id":"0754501","f":"WC","fs":"sheet"},{"c":"ELM104","t":"American Sign Language 4","s":1,"k":"1","cr":3,"p":"","id":"0754511","f":"WC","fs":"sheet"},{"c":"ELP101","t":"Elementary Polish 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754551","f":"WC","fs":"sheet"},{"c":"ELP102","t":"Elementary Polish 2","s":1,"k":"1","cr":3,"p":"","id":"0754561","f":"WC","fs":"sheet"},{"c":"ELP103","t":"Intermediate Polish","s":1,"k":"1","cr":3,"p":"","id":"0754571","f":"WC","fs":"sheet"},{"c":"ELP105","t":"Polish for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"0754581","f":"WC","fs":"sheet"},{"c":"ELP201","t":"Modern Polish Literature","s":1,"k":"1","cr":3,"p":"","id":"0754591","f":"WC","fs":"sheet"},{"c":"ELR101","t":"Elementary Russian 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754601","f":"WC","fs":"sheet"},{"c":"ELR102","t":"Elementary Russian 2","s":1,"k":"1","cr":3,"p":"","id":"0754611","f":"WC","fs":"sheet"},{"c":"ELR103","t":"Intermediate Russian","s":1,"k":"1","cr":3,"p":"","id":"0754621"},{"c":"ELR105","t":"Russian for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"0754631"},{"c":"ELS101","t":"Elementary Spanish 1","s":1,"k":"1","cr":3,"p":"Pre-requisites of CSE 99 and ESL 98 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"0754651","f":"WC","fs":"sheet"},{"c":"ELS102","t":"Elementary Spanish 2","s":1,"k":"1","cr":3,"p":"","id":"0754661","f":"WC","fs":"sheet"},{"c":"ELS103","t":"Intermediate Spanish 1","s":1,"k":"1","cr":3,"p":"","id":"0754671","f":"WC","fs":"sheet"},{"c":"ELS104","t":"Intermediate Spanish 2","s":1,"k":"1","cr":3,"p":"","id":"1308691","f":"WC","fs":"sheet"},{"c":"ELS105","t":"Spanish for Heritage Speakers 1","s":1,"k":"1","cr":3,"p":"","id":"0754681","f":"WC","fs":"sheet"},{"c":"ELS106","t":"Spanish for Heritage Speakers 2","s":1,"k":"1","cr":3,"p":"","id":"0754691","f":"WC","fs":"sheet"},{"c":"ELS200","t":"Latin American Literature 1","s":1,"k":"1","cr":3,"p":"","id":"0754701","f":"IS","fs":"sheet"},{"c":"ELS201","t":"Latin American Literature 2","s":1,"k":"1","cr":3,"p":"","id":"0754711","f":"IS","fs":"sheet"},{"c":"ELS204","t":"Latin American Civilizations","s":1,"k":"1","cr":3,"p":"","id":"0754721","f":"WC","fs":"sheet"},{"c":"ELS209","t":"Spanish Grammar and Usage","s":1,"k":"1","cr":3,"p":"","id":"1141921","f":"WC","fs":"sheet"},{"c":"ELT101","t":"Elementary Tibetan 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"1187201","f":"WC","fs":"sheet"},{"c":"ELT102","t":"Elementary Tibetan 2","s":1,"k":"1","cr":3,"p":"","id":"1187211","f":"WC","fs":"sheet"},{"c":"ELT105","t":"Tibetan for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"1177681","f":"WC","fs":"sheet"},{"c":"ELU101","t":"Elementary Uzbek 1","s":1,"k":"1","cr":3,"p":"","id":"1328901"},{"c":"ELU102","t":"Elementary Uzbek 2","s":1,"k":"1","cr":3,"p":"","id":"1328911"},{"c":"ELU105","t":"Uzbek for Heritage Speakers","s":1,"k":"1","cr":3,"p":"","id":"1324361","f":"WC","fs":"sheet"},{"c":"ELV101","t":"Elementary Bengali 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754771"},{"c":"ELV102","t":"Elementary Bengali 2","s":1,"k":"1","cr":3,"p":"","id":"0754781"},{"c":"ELV103","t":"Intermediate Bengali","s":1,"k":"1","cr":3,"p":"","id":"1157811"},{"c":"ELV105","t":"Bengali for Heritage Students","s":1,"k":"1","cr":3,"p":"","id":"0754791","f":"WC","fs":"sheet"},{"c":"ELV201","t":"Modern Bengali Literature","s":1,"k":"1","cr":3,"p":"","id":"0754801","f":"IS","fs":"sheet"},{"c":"ELY101","t":"Elementary Haitian Creole 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"1373301"},{"c":"ELY102","t":"Elementary Haitian Creole 2","s":1,"k":"1","cr":3,"p":"","id":"1373311"},{"c":"ELY105","t":"Haitian Creole for Heritage Students","s":1,"k":"1","cr":3,"p":"","id":"1373321","f":"WC","fs":"sheet"},{"c":"ELZ101","t":"Elementary Portuguese 1","s":1,"k":"1","cr":3,"p":"Pre/Co-requisite of CSE 95 OR ESL 97 is required.","id":"0754811","f":"WC","fs":"sheet"},{"c":"ELZ102","t":"Elementary Portuguese 2","s":1,"k":"1","cr":3,"p":"","id":"0770001","f":"WC","fs":"sheet"},{"c":"ELA250","t":"Modern Arabic Lit in Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1256301","f":"IS","fs":"sheet"},{"c":"ELC250","t":"Chinese Lit in English Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1261471","f":"WC","fs":"sheet"},{"c":"ELF250","t":"Modern French Lit in Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"","id":"1157841","f":"WC","fs":"sheet"},{"c":"ELJ250","t":"Japanese Literature in Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1092821","f":"IS","fs":"sheet"},{"c":"ELK250","t":"Modern Korean Lit in Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1256311","f":"IS","fs":"sheet"},{"c":"ELS250","t":"Latin American Fiction in Translation","s":1,"k":"1","sub":"Taught in English","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0754761","f":"IS","fs":"sheet"},{"c":"ENG204","t":"Asian American Literature","s":1,"k":"2","cr":3,"p":"","id":"0755151","f":"US","fs":"sheet"},{"c":"ENG205","t":"The Bible as Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755161","f":"WC","fs":"sheet"},{"c":"ENG225","t":"Afro-American Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755271","f":"US","fs":"sheet"},{"c":"ENG235","t":"Cultural Identity in American Lit","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755301","f":"US","fs":"sheet"},{"c":"ENG245","t":"Images of Women in Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755351","f":"IS","fs":"sheet"},{"c":"ENG247","t":"The Woman Writer: Her Vision & Art","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755361","f":"IS","fs":"sheet"},{"c":"ENG248","t":"Latino/Latina Writing of the United St","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755371","f":"US","fs":"sheet"},{"c":"ENG250","t":"The Short Story","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755381","f":"WC","fs":"sheet"},{"c":"ENG252","t":"Sexuality in Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755401"},{"c":"ENG256","t":"Humor in Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755441","f":"CE","fs":"sheet"},{"c":"ENG260","t":"The Novel","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755471","f":"IS","fs":"sheet"},{"c":"ENG261","t":"LGBTQ Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755481","f":"IS","fs":"sheet"},{"c":"ENG265","t":"The Drama","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755491","f":"CE","fs":"sheet"},{"c":"ENG266","t":"Shakespeare","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755501","f":"WC","fs":"sheet"},{"c":"ENG268","t":"Immigrant Experience in American Lit","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755521","f":"US","fs":"sheet"},{"c":"ENG269","t":"Contemporary Black American Fiction","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755531","f":"US","fs":"sheet"},{"c":"ENG270","t":"Introduction to Poetry","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755541","f":"WC","fs":"sheet"},{"c":"ENG272","t":"Literature and Film","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755561","f":"CE","fs":"sheet"},{"c":"ENG275","t":"The Great Writer","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755581","f":"CE","fs":"sheet"},{"c":"ENG280","t":"Children's Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755591","f":"IS","fs":"sheet"},{"c":"ENG289","t":"Introduction to Literary Studies","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"1139761","f":"CE","fs":"sheet"},{"c":"ENG290","t":"British Literature I","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"0755621","f":"WC","fs":"sheet"},{"c":"ENG291","t":"British Literature II","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"0755631","f":"WC","fs":"sheet"},{"c":"ENG292","t":"American Literature I","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"0755641","f":"US","fs":"sheet"},{"c":"ENG293","t":"American Literature II","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"0755651","f":"US","fs":"sheet"},{"c":"ENG294","t":"Classical Literature","s":1,"k":"2","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"1139771","f":"WC","fs":"sheet"},{"c":"ENG295","t":"World Literatures Written in English","s":1,"k":"2","cr":3,"p":"Pre-requisites of ENG 102 AND 40 cumulative credits are required.","id":"0755661"},{"c":"ENN240","t":"Literature of the City","s":1,"k":"2","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755821","f":"US","fs":"sheet"},{"c":"HUP101","t":"Introduction to Philosophy","s":1,"k":"3","cr":3,"p":"Pre/co-requisite of ENA/G 101 OR ESA 99 OR English Proficiency is required.","id":"0760161","f":"IS","fs":"sheet"},{"c":"HUP104","t":"Ethics and Moral Issues","s":1,"k":"3","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760191","f":"IS","fs":"sheet"},{"c":"HUP105","t":"Philosophy of Religion","s":1,"k":"3","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760201","f":"WC","fs":"sheet"},{"c":"HUP106","t":"Social and Political Philosophy","s":1,"k":"3","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760211","f":"IS","fs":"sheet"},{"c":"HUP107","t":"Philosophy of Art","s":1,"k":"3","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0761211","f":"CE","fs":"sheet"},{"c":"HUP108","t":"Environmental Ethics","s":1,"k":"3","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760221","f":"IS","fs":"sheet"},{"c":"HUA101","t":"Introduction to Art","s":1,"k":"4","cr":3,"p":"Pre/co-requisite of ENA/G 101 OR ESA 99 OR English Proficiency is required.","id":"0758061","f":"CE","fs":"sheet"},{"c":"HUA130","t":"Beginning Photography","s":1,"k":"4","cr":3,"p":"","id":"0758191"},{"c":"HUA165","t":"Art History: Prehistoric Through Gothic","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758271","f":"CE","fs":"sheet"},{"c":"HUA202","t":"History of Photography","s":1,"k":"4","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0758381","f":"CE","fs":"sheet"},{"c":"HUC101","t":"Intro to Communication Studies","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758791","f":"IS","fs":"sheet"},{"c":"HUC106","t":"Public Speaking","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758831","f":"CE","fs":"sheet"},{"c":"HUV150","t":"Art of Film","s":1,"k":"4","al":"HUC150","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0758971","f":"WC","fs":"catalog"},{"c":"HUV270","t":"American Film","s":1,"k":"4","al":"HUC270","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0759131","f":"US","fs":"catalog"},{"c":"HUM101","t":"Introduction to Music","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0759711","f":"CE","fs":"sheet"},{"c":"HUM170","t":"Guitar I","s":1,"k":"4","cr":3,"p":"Pre-requisites of CSE 99 or CUNY Reading Exam pass/exemption AND MAT 96 or CUNY Math Exam pass/exemption are required.","id":"0759901"},{"c":"HUT101","t":"The Art of Theater","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1177651","f":"CE","fs":"sheet"},{"c":"HUT110","t":"Acting I","s":1,"k":"4","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1177671"},{"c":"SSA100","t":"Introduction to Anthropology","s":1,"k":"5","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0772551","f":"SW","fs":"sheet"},{"c":"SSA101","t":"Cultural Anthropology","s":1,"k":"5","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0772561","f":"WC","fs":"sheet"},{"c":"SSE103","t":"Introduction to Microeconomics","s":1,"k":"5","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0772801","f":"IS","fs":"sheet"},{"c":"SSE104","t":"Introduction to Macroeconomics","s":1,"k":"5","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0772811","f":"IS","fs":"sheet"},{"c":"SSN103","t":"Intro to Labor & Organizing","s":1,"k":"5","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"0773281","f":"US","fs":"sheet"},{"c":"SSP101","t":"U.S. Power and Politics","s":1,"k":"5","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773531","f":"US","fs":"sheet"},{"c":"SSP250","t":"Political Ideas and Ideologies","s":1,"k":"5","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773601","f":"IS","fs":"sheet"},{"c":"SSS100","t":"Introduction to Sociology","s":1,"k":"5","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773621","f":"IS","fs":"sheet"},{"c":"SSY101","t":"General Psychology","s":1,"k":"5","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"0773831","f":"SW","fs":"sheet"},{"c":"SSY112","t":"Introduction to Dis/Ability","s":1,"k":"5","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1523101","f":"IS","fs":"sheet"},{"c":"SSH101","t":"Themes in American Hist to 1865","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772911","f":"US","fs":"sheet"},{"c":"SSH102","t":"Themes in American Hist since 1865","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772921","f":"US","fs":"sheet"},{"c":"SSH103","t":"Western Civ: Ancient to Renaissance","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772931","f":"WC","fs":"sheet"},{"c":"SSH104","t":"Western Civ: Renaissance to Modern","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772941","f":"WC","fs":"sheet"},{"c":"SSH105","t":"World Hist from Ancient to 1500","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772951","f":"WC","fs":"sheet"},{"c":"SSH106","t":"World Hist from 1500 to the Present","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772961","f":"WC","fs":"sheet"},{"c":"SSH110","t":"East Asia Civilization and Societies","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0772971","f":"WC","fs":"sheet"},{"c":"SSH113","t":"Modern Chinese History","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304921","f":"WC","fs":"sheet"},{"c":"SSH114","t":"Modern Japanese History","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304931","f":"WC","fs":"sheet"},{"c":"SSH121","t":"Ancient Greek Civilization","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304941","f":"WC","fs":"sheet"},{"c":"SSH122","t":"History of the Roman State & People","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304951","f":"WC","fs":"sheet"},{"c":"SSH131","t":"Latin American History 1","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1370001"},{"c":"SSH132","t":"Latin American History 2","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1370011"},{"c":"SSH151","t":"Women and Gender in US History","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304961","f":"US","fs":"sheet"},{"c":"SSH153","t":"His. US Foreign Policy/Int. Relations","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1304971","f":"WC","fs":"sheet"},{"c":"SSH171","t":"The World Since 1900","s":1,"k":"6","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"1369991","f":"WC","fs":"sheet"},{"c":"SSH231","t":"Afro-American History","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0773031","f":"US","fs":"sheet"},{"c":"SSH232","t":"Survey of Latin Am. & Caribbean Hist","s":1,"k":"6","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0773041","f":"WC","fs":"sheet"},{"c":"ENG110","t":"English Grammar Syntax","s":2,"k":"E","cr":3,"p":"","id":"0754981"},{"c":"ENG208","t":"Introduction to Digital Journalism","s":2,"k":"E","nocat":true},{"c":"ENG209","t":"Advanced Digital Journalism","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENG 208 is required","id":"1305121"},{"c":"ENG210","t":"Journalism - Its scope and use","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755171","f":"IS","fs":"sheet"},{"c":"ENG211","t":"Journalism - The Craft of Gathering and Reporting the News","s":2,"k":"E","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"0755181"},{"c":"ENG212","t":"Feature Writing for Newspapers and Popular Magazines","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENG 103 is required.","id":"0755191","f":"CE","fs":"sheet"},{"c":"ENG213","t":"Broadcast Journalism/Radio","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755201","f":"IS","fs":"sheet"},{"c":"ENG220","t":"Seminar in Teaching Writing","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755261","f":"IS","fs":"sheet"},{"c":"ENG238","t":"Screenwriting","s":2,"k":"E","eq":"HUV238","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755311","f":"CE","fs":"sheet"},{"c":"ENG271","t":"Poetry Workshop","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755551","f":"CE","fs":"sheet"},{"c":"ENG274","t":"Creative Non-Fiction Workshop","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755571","f":"CE","fs":"sheet"},{"c":"ENG276","t":"Fiction Writing Workshop","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1139751","f":"CE","fs":"sheet"},{"c":"ENG277","t":"Creative Writing: New Media Workshop","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1305131"},{"c":"ENG288","t":"English Major Internship","s":2,"k":"E","cr":3,"p":"Pre-requisite of  ENG 102 is required.","id":"1166641"},{"c":"ENN191","t":"Art, Politics and Protest","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755751","f":"CE","fs":"sheet"},{"c":"ENN193","t":"Ideal Societies","s":2,"k":"E","eq":"SSN193","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755761"},{"c":"ENN195","t":"Violence in American Art and Culture","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755771","f":"US","fs":"sheet"},{"c":"ENN198","t":"Creative Writing Workshop","s":2,"k":"E","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0755801","f":"CE","fs":"sheet"},{"c":"HUA103","t":"Beginning Drawing","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758081"},{"c":"HUA104","t":"Introduction to Design","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758091"},{"c":"HUA110","t":"Beginning Painting","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758141"},{"c":"HUA120","t":"Beginning Sculpture","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758161"},{"c":"HUA121","t":"21st Century Photography","s":2,"k":"H","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"1328821"},{"c":"HUA166","t":"Art Hist: Renaissance Through Modern","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758281","f":"CE","fs":"sheet"},{"c":"HUA167","t":"Introduction to African Art","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758291"},{"c":"HUA180","t":"Life Drawing","s":2,"k":"H","cr":3,"p":"Pre-requisite of HUA 103 is required","id":"0758311"},{"c":"HUA196","t":"Latin American Art","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1486091","f":"CE","fs":"sheet"},{"c":"HUA200","t":"Art of the Twentieth Century","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758361","f":"CE","fs":"sheet"},{"c":"HUA212","t":"History of Design","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758431","f":"CE","fs":"sheet"},{"c":"HUA214","t":"History of Illustration","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1350421","f":"US","fs":"sheet"},{"c":"HUA215","t":"Art of the Renaissance in Italy","s":2,"k":"H","cr":3,"p":"Pre-requisite of CSE 99 or CUNY Reading Exemption AND pre/co-requisite of ENG 101 are required","id":"0758441","f":"WC","fs":"sheet"},{"c":"HUC140","t":"Introduction to Broadcasting","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758951","f":"CE","fs":"catalog"},{"c":"HUV238","t":"Screenwriting","s":2,"k":"H","al":"HUC238","eq":"ENG238","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0759091","f":"CE","fs":"catalog"},{"c":"HUC104","t":"Voice and Diction","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758811"},{"c":"HUC108","t":"Professional Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758841","f":"IS","fs":"sheet"},{"c":"HUC112","t":"Small Group Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758881"},{"c":"HUC113","t":"Oral Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758891","f":"CE","fs":"sheet"},{"c":"HUC117","t":"Communication and Technology","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1139731","f":"IS","fs":"sheet"},{"c":"HUC118","t":"Gender and Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1310701","f":"IS","fs":"sheet"},{"c":"HUC119","t":"Non-Verbal Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1281131","f":"SW","fs":"sheet"},{"c":"HUC120","t":"Mass Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0758931","f":"IS","fs":"sheet"},{"c":"HUC127","t":"Sports Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1350431","f":"CE","fs":"sheet"},{"c":"HUC204","t":"Race and Communication","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1350441","f":"US","fs":"sheet"},{"c":"HUV240","t":"Video Production Workshop","s":2,"k":"H","al":"HUC240","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 99 are required.","id":"0759101"},{"c":"HUM107","t":"Music of Latin America","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0759761","f":"WC","fs":"sheet"},{"c":"HUM109","t":"World Music","s":2,"k":"H","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"1306431","f":"WC","fs":"sheet"},{"c":"HUM110","t":"Introduction to Jazz","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0759771","f":"CE","fs":"sheet"},{"c":"HUM140","t":"Music Theory I","s":2,"k":"H","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0759791"},{"c":"HUM210","t":"American Music","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760011","f":"CE","fs":"sheet"},{"c":"HUP102","t":"Critical Thinking","s":2,"k":"H","cr":3,"p":"Pre/co-requisite of ENA/G 101 OR ESA 99 OR English Proficiency is required.","id":"0760171","f":"IS","fs":"sheet"},{"c":"HUP109","t":"Philosophy of Law","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1139741","f":"US","fs":"sheet"},{"c":"HUP112","t":"Logic and Philosophy","s":2,"k":"H","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0762301","f":"SW","fs":"sheet"},{"c":"HUP114","t":"Medical Ethics","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1141941","f":"IS","fs":"sheet"},{"c":"HUP116","t":"Latin American Philosophy","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1144291","f":"WC","fs":"sheet"},{"c":"HUP117","t":"Medieval & Renaissance Philosophy","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1282721","f":"WC","fs":"sheet"},{"c":"HUP118","t":"African Philosophy","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1144301","f":"WC","fs":"sheet"},{"c":"HUP121","t":"Eastern Philosophy and Religion","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1144311","f":"WC","fs":"sheet"},{"c":"HUP122","t":"Philosophy of Gender and Sex","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1306451","f":"IS","fs":"sheet"},{"c":"HUP125","t":"Introduction to Philosophy of Science","s":2,"k":"H","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1350471"},{"c":"HUP215","t":"Philosophy of Love","s":2,"k":"H","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760271"},{"c":"HUT220","t":"Contemporary Latina/o Theatre in the United States","s":2,"k":"H","cr":3,"p":"Pre-requisite of CSE 99 or CUNY Reading Exemption AND pre/co-requisite of ENG 101 are required","id":"1186861","f":"US","fs":"sheet"},{"c":"SSA103","t":"Introduction to Archaeology","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0772571","f":"SW","fs":"sheet"},{"c":"SSA106","t":"Anthropology of Latin America","s":2,"k":"S","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0772591","f":"WC","fs":"sheet"},{"c":"SSA120","t":"Peoples & Cultures of the Caribbean","s":2,"k":"S","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0772611","f":"WC","fs":"sheet"},{"c":"BTC105","t":"Computers and Society","s":2,"k":"S","al":"SSD-BTC105","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0749941"},{"c":"SSE105","t":"International Economics","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0772821","f":"WC","fs":"sheet"},{"c":"SSE125","t":"World Geography","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0772851","f":"WC","fs":"sheet"},{"c":"SSI210","t":"Women in Society","s":2,"k":"S","cr":3,"p":"","id":"0773181","f":"IS","fs":"sheet"},{"c":"SSJ101","t":"Introduction to Criminal Justice","s":2,"k":"S","cr":3,"p":"Pre/co-requisite of CJF 101 is required.","id":"0773241","f":"US","fs":"catalog"},{"c":"SSJ201","t":"Criminology","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSJ 101 AND pre/co-requisite of ENG 101 are required.","id":"1306491"},{"c":"SSN182","t":"Urban Anthropology","s":2,"k":"S","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773311","f":"IS","fs":"sheet"},{"c":"SSN183","t":"History of Minorities","s":2,"k":"S","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0773321","f":"US","fs":"sheet"},{"c":"SSN184","t":"Environmental Psychology","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 99 are required.","id":"0773331","f":"IS","fs":"sheet"},{"c":"SSN186","t":"Sociology of the Black Community","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0773351"},{"c":"SSN187","t":"Urban Sociology","s":2,"k":"S","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0773361","f":"US","fs":"sheet"},{"c":"SSN189","t":"The Urban Economy","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0773381","f":"IS","fs":"sheet"},{"c":"SSN190","t":"Leadership","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0773391"},{"c":"SSN192","t":"Practical Politics in New York City","s":2,"k":"S","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773411","f":"US","fs":"sheet"},{"c":"SSN194","t":"Religion and Social Change","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0773431","f":"IS","fs":"sheet"},{"c":"SSN199","t":"Neighborhood History","s":2,"k":"S","cr":3,"p":""},{"c":"SSN202","t":"Environmental Sociology","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"1182271","f":"IS","fs":"sheet"},{"c":"SSN204","t":"Crime and Justice in Urban Society","s":2,"k":"S","cr":3,"p":"Pre-requisites of SSJ 101 AND SSJ 202 AND SSJ 203 AND  ENG 102 AND  pre/co-requisite of ENG 103 are required.","id":"0773491"},{"c":"SSN210","t":"The Politics of Sexuality","s":2,"k":"S","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773501","f":"US","fs":"sheet"},{"c":"SSN240","t":"History of New York City","s":2,"k":"S","cr":3,"p":"Pre/co-requisite of ENA/ENC/ENG 101 is required.","id":"0773511","f":"US","fs":"sheet"},{"c":"SSN280","t":"Urban Black Psychology","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 101 AND MATH proficiency are required.","id":"0773521","f":"US","fs":"sheet"},{"c":"SSN193","t":"Ideal Societies","s":2,"k":"S","eq":"ENN193","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0773421"},{"c":"HUN180","t":"Intro to Intercultural Comms","s":2,"k":"S","al":"SSN-HUN180","cr":3,"p":"Pre-requisites of ENG 101 and HUC 101 are required","id":"0760061","f":"US","fs":"catalog"},{"c":"SSP200","t":"Global Politics","s":2,"k":"S","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773551","f":"WC","fs":"sheet"},{"c":"SSP220","t":"Politics of Latin America and the Caribbean","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 AND MAT 95 OR exemptions/proficiency in English & Math are required.","id":"0773561"},{"c":"SSP240","t":"Crime and Punishment","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 and CSE 99 OR passing scores/exemptions on the CUNY Reading and Writing Tests are required.","id":"0773581"},{"c":"SSP245","t":"Law and Human Rights in America","s":2,"k":"S","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0773591","f":"US","fs":"sheet"},{"c":"SSS102","t":"Social Movements","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 or ENG/C 101 placement or CUNY Writing exemption AND SSS 100 are required","id":"0773641","f":"IS","fs":"sheet"},{"c":"SSS175","t":"Sociology of Organizations","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 99 or ENG/C 101 placement or CUNY Writing exemption AND SSS 100 are required","id":"0773681"},{"c":"SSS185","t":"Sociology of Education","s":2,"k":"S","cr":3,"p":"","id":"0773691"},{"c":"SSS190","t":"Sociology of American Deaf Communities","s":2,"k":"S","cr":3,"p":"","id":"0773701"},{"c":"SSS280","t":"Sociology of the Family","s":2,"k":"S","cr":3,"p":"","id":"0773771"},{"c":"SSY105","t":"Learning & Edu: Childhood to Adolescence","s":2,"k":"S","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0773841"},{"c":"SSY200","t":"Personality","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773891","f":"IS","fs":"sheet"},{"c":"SSY205","t":"Psychology of Women","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773901"},{"c":"SSY210","t":"Principles of Behavior Management","s":2,"k":"S","cr":3,"p":"Pre-requisites of SSY 101 AND ENG 101 are required","id":"0773911"},{"c":"SSY230","t":"Abnormal Psychology","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773921","f":"SW","fs":"sheet"},{"c":"SSY240","t":"Developmental Psychology I","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773941","f":"IS","fs":"sheet"},{"c":"SSY241","t":"Developmental Psychology II","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773951","f":"IS","fs":"sheet"},{"c":"SSY250","t":"Social Psychology","s":2,"k":"S","cr":3,"p":"Pre-requisites of ENG 102 AND SSY 230 are required.","id":"0773981","f":"IS","fs":"sheet"},{"c":"SSY260","t":"Group Dynamics","s":2,"k":"S","cr":3,"p":"Pre-requisite of SSY 101 is required","id":"0773991"},{"c":"CSE110","t":"Literacy and Propaganda","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisite of ESL 99 or ESR 99 is required","id":"0753751"},{"c":"CSE111","t":"Literacy and Propaganda Accelerated","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisite of CSE 95 OR an Accuplacer Reading score between 45 and 54 is required.","id":"1367601"},{"c":"CSE120","t":"Reading the Biography","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of ESL 98 is required.","id":"0753761"},{"c":"CSE150","t":"The Evolution of the Reading Experience","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0753771"},{"c":"EIS215","t":"Language Issues in a Global World","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1345771"},{"c":"EIS216","t":"International Schooling in Global Contexts","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1472091"},{"c":"ELA260","t":"Arab Cinema: Cultural Insights through Film","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1338791"},{"c":"ELE110","t":"Arts in Education","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 101 AND MATH proficiency are required.","id":"1231051"},{"c":"ELL101","t":"Introduction to Language","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0754451"},{"c":"ELL220","t":"Introduction to Sociolinguistics","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisites of MAT 96 or CUNY MATH exemption AND ENG 101 AND ELL 101 are required","id":"0754471"},{"c":"ELN101","t":"Introduction to Bilingualism","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0754521"},{"c":"ELN194","t":"The Latine Community: A Minority Group Experience","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0754541"},{"c":"ELR250","t":"20th Century Russian Literature in Translation","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1261531"},{"c":"ENG222","t":"The Graphic Novel","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1548461"},{"c":"ENG241","t":"Literature, Health, and Medicine","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1557521"},{"c":"ENG273","t":"Playwriting Workshop","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1539721"},{"c":"HUC102","t":"Principles of Communication for Non-Native Speakers","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisites of CSE 99 or an exemption on the Reading test AND ESL 99 or an exemption on the Writing test are required","id":"1282411"},{"c":"HUC116","t":"Survey of Speech, Language & Hearing Disorders","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0758921"},{"c":"HUC170","t":"Art of Theatre","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0759001"},{"c":"HUC192","t":"Health Communication","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1328791"},{"c":"HUN110","t":"Hip Hop:Music, Culture and Politics","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 101 AND MATH proficiency are required.","id":"1350451"},{"c":"HUN192","t":"Art and Society","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0760081"},{"c":"HUN195","t":"Art in New York: A Museum/Gallery Seminar","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0760101"},{"c":"HUN196","t":"Film and New York City","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"0760111"},{"c":"HUN212","t":"Photography in New York","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1369921"},{"c":"HUN245","t":"The New York Theatre Experience","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"0760141"},{"c":"HUP115","t":"Ethical Leadership in the Global Economy","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1484661"},{"c":"HUT210","t":"Theatre: Pre-History to the Renaissance","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisites of HUT 110 AND HUT 115 are required.","id":"1177981"},{"c":"HUT211","t":"Theatre: Renaissance to Modern Times","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 101 and HUT 101 are required","id":"1177991"},{"c":"HUZ202","t":"History of Photography","s":0,"f":"CE","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1585221"},{"c":"LBN105","t":"InfoCity: Informed Citizens in the Information Age","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisite of ENG 101 AND  pre/co-requisite of MAT 96 are required.","id":"1283671"},{"c":"LIB101","t":"Introduction to Women, Gender and Sexuality Studies","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 101 AND MATH proficiency are required.","id":"1369861"},{"c":"LIB105","t":"Introduction to Ethnic Studies","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1532781"},{"c":"LIB201","t":"Transnational Feminisms","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 102 AND LIB 101 AND pre/co-requisites of ENG 103 are required.","id":"1369871"},{"c":"LIN190","t":"Pandemics in Global Contexts","s":0,"f":"WC","fs":"catalog","cr":3,"p":"","id":"1545961"},{"c":"MAC100","t":"Computing Fundamentals","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisite of a English Proficiency Index Score greater than or equal to 65 is required.","id":"1472081"},{"c":"MAT200","t":"Precalculus","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of MAT 115/117 OR Math Proficiency Index Score greater or equal to 70 is required.","id":"0762041"},{"c":"MAT201","t":"Calculus I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of MAT 200 or a waiver is required","id":"0762051"},{"c":"SCB115","t":"Principles of Biology","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0768751"},{"c":"SCB165","t":"Vertebrate Evolution","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"1231521"},{"c":"SCB200","t":"Principles of Botany","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"1506351"},{"c":"SCB201","t":"General Biology I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0768801"},{"c":"SCB202","t":"General Biology II","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of SCB 201 is required","id":"0768811"},{"c":"SCB203","t":"Human Anatomy and Physiology I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"0768821"},{"c":"SCB208","t":"Vertebrate Anatomy and Physiology 1","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"0768851"},{"c":"SCB265","t":"Ecology","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of SCB 202 is required.","id":"1156971"},{"c":"SCC105","t":"Introduction to Chemistry","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of English Proficiency AND MAT 115 are required.","id":"1283331"},{"c":"SCC110","t":"Foundations of Chemistry","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"1283321"},{"c":"SCC201","t":"General Chemistry I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of English Proficiency AND MAT 115 are required.","id":"0769021"},{"c":"SCC202","t":"General Chemistry II","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of SCC 201 is required","id":"0769031"},{"c":"SCC205","t":"Introduction to Chemistry","s":0,"f":"SW","fs":"catalog","cr":4,"p":"","id":"0769081"},{"c":"SCC210","t":"Foundations of Chemistry","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0769041"},{"c":"SCD200","t":"Introductory Nutrition","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisite of MAT 96 AND  pre/co-requisite of ENG 101 are required","id":"0769141"},{"c":"SCG120","t":"Introduction to Oceanography","s":0,"f":"SW","fs":"catalog","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"1231011"},{"c":"SCH150","t":"Drugs, Society and Human Behavior","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"0769731"},{"c":"SCH210","t":"Human Sexuality","s":0,"f":"IS","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 99  AND CSE 99 AND MAT 96 OR passing scores/exemptions on the CUNY Reading, Writing & Math tests are required.","id":"0769751"},{"c":"SCN194","t":"HIV/AIDS, Science and Society","s":0,"f":"WC","fs":"catalog","cr":3,"p":"Pre-requisites of ENG 101 AND MATH proficiency are required.","id":"0769951"},{"c":"SCN240","t":"Food and Culture","s":0,"f":"US","fs":"catalog","cr":3,"p":"Pre-requisite of ENA/ENG 101 is required.","id":"1183931"},{"c":"SCP160","t":"Foundations for the Physical Sciences","s":0,"f":"SW","fs":"catalog","cr":3,"p":"","id":"1244381"},{"c":"SCP201","t":"Fundamentals of Physics I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of Math Proficiency (MATHX=60+) or Math Developmental class AND English Proficiency (ENGLX=65+) or English Developmental class are required.","id":"0770421"},{"c":"SCP202","t":"Fundamentals of Physics II","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisite of SCP 201 is required","id":"0770431"},{"c":"SCP231","t":"General Physics I","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of ENG 101 AND MAT 201 are required.","id":"0770441"},{"c":"SCP232","t":"General Physics II","s":0,"f":"SW","fs":"catalog","cr":4,"p":"Pre-requisites of SCP 231 and MAT 202 are required","id":"0770451"},{"c":"SSS210","t":"Women in Society","s":0,"f":"IS","fs":"catalog","cr":3,"p":"","id":"0773731"}];
+const COURSES = {}; RAW.forEach(c => COURSES[c.c] = c);
+const CAT1 = {1:'Modern Language or Literature',2:'English Literature',3:'Philosophy',4:'Humanities',5:'Social Sciences',6:'History'};
+const CAT1_LONG = {5:'Anthropology, Sociology, Psychology, Political Science, or Economics'};
+const CAT2 = {E:'English Department',H:'Humanities Department',S:'Social Science Department'};
+const FLEX = {WC:'World Cultures & Global Issues',US:'U.S. Experience in Its Diversity',SW:'Scientific World',IS:'Individual & Society',CE:'Creative Expression'};
+const FLEX_ORDER = ['WC','US','SW','IS','CE','ADD'];
+const STATUSES = ['Planned','In Progress','Completed'];
+const CATALOG = 'https://laguardia.catalog.cuny.edu/courses/';
+const STORE_KEY = 'lagcc-la-planner-v1';
+const byCode = (a,b) => a.c.localeCompare(b.c);
+const S1 = RAW.filter(c => c.s === 1).sort(byCode);
+const S2 = RAW.filter(c => c.s === 2).sort(byCode);
+const FLEXONLY = RAW.filter(c => c.s === 0).sort(byCode);
+
+/* status icons: empty box / box with squiggle / checked box */
+const ICON = {
+  '': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5" stroke-dasharray="2.5 2"/></svg>',
+  'Planned': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="12" height="12" rx="2.5"/></svg>',
+  'In Progress': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M4.5 8.6c1-1.6 2-1.6 3 0s2 1.6 3 0" stroke-linecap="round"/></svg>',
+  'Completed': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M4.8 8.2l2.2 2.2 4.2-4.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+const SCLASS = {'':'', 'Planned':'planned', 'In Progress':'progress', 'Completed':'complete'};
+
+/* ===================== STATE ===================== */
+function blankState(){
+  const flex = {}; FLEX_ORDER.forEach(k => flex[k] = {code:'',status:'',term:'',other:null});
+  const core = {}; Object.keys(CAT1).forEach(k => core[k] = {code:'',status:'',term:'',order:0});
+  return {student:{name:'',id:'',advisor:'',date:''}, core, flex, elec:[], notes:'', seq:1};
+}
+let state = blankState();
+function load(){
+  try{ const s = localStorage.getItem(STORE_KEY); if(s){ const o = JSON.parse(s); if(o && o.core && o.flex) state = Object.assign(blankState(), o); } }catch(e){}
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); const n = document.getElementById('savedNote'); n.textContent = 'Saved ' + new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) + ' in this browser.'; }catch(e){}
+}
+
+/* ===================== HELPERS ===================== */
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function label(c){ return c.c + ' ' + c.t + (c.f ? ' (' + c.f + ')' : ''); }
+function courseOf(code){ return COURSES[code] || null; }
+function equivOf(code){ const c = courseOf(code); return c && c.eq ? c.eq : null; }
+function flexName(k){ return k === 'ADD' ? 'additional course' : k; }
+/* the pick object that owns a course (status/term live there) */
+function pickOf(code){
+  if(!code) return null;
+  for(const k in state.core) if(state.core[k].code === code) return state.core[k];
+  for(const k of FLEX_ORDER) if(state.flex[k].code === code) return state.flex[k];
+  for(const e of state.elec) if(e.code === code) return e;
+  return null;
+}
+function statusOf(code){ const p = pickOf(code); return p ? (p.status || '') : ''; }
+function termOf(code){ const p = pickOf(code); return p ? (p.term || '') : ''; }
+function setStatus(code, v){ const p = pickOf(code); if(p) p.status = v; }
+function setTerm(code, v){ const p = pickOf(code); if(p) p.term = v; }
+
+/* ===================== ALLOCATION ===================== */
+function compute(){
+  const R = {coreCount:{}, sixth:null, flexAssign:{}, dbl:[], noFree:[], coreNotes:{}, flexNotes:{}, elecNotes:[], picked:new Set()};
+  Object.values(state.core).forEach(v => v.code && R.picked.add(v.code));
+  FLEX_ORDER.forEach(k => state.flex[k].code && R.picked.add(state.flex[k].code));
+  state.elec.forEach(e => e.code && R.picked.add(e.code));
+
+  FLEX_ORDER.forEach(k => { const m = state.flex[k]; if(m.code || m.other) R.flexAssign[k] = {code:m.code, other:m.other, source:'manual'}; });
+
+  const coreRows = Object.entries(state.core).filter(([k,v]) => v.code).sort((a,b) => a[1].order - b[1].order);
+  coreRows.forEach(([k,v], i) => { if(i < 5) R.coreCount[k] = {code:v.code, source:'manual'}; else R.sixth = {cat:k, code:v.code}; });
+
+  function findFlexWith(code){ const eq = equivOf(code); return FLEX_ORDER.find(k => R.flexAssign[k] && (R.flexAssign[k].code === code || (eq && R.flexAssign[k].code === eq))); }
+  function placeFlex(code, source, cat){
+    const c = courseOf(code); if(!c || !c.f) return {key:null, reason:'nocode'};
+    const already = findFlexWith(code); if(already) { if(R.flexAssign[already].source === 'manual') R.flexAssign[already].via = source; return {key:already, reason:'already'}; }
+    if(!R.flexAssign[c.f]) { R.flexAssign[c.f] = {code, source, cat}; return {key:c.f}; }
+    if(!R.flexAssign.ADD) { R.flexAssign.ADD = {code, source, cat}; return {key:'ADD'}; }
+    return {key:null, reason:'full'};
+  }
+  coreRows.forEach(([k,v], i) => {
+    if(i >= 5) return;
+    const c = courseOf(v.code); if(!c) return;
+    if(!c.f){ R.coreNotes[k] = {kind:'nocode'}; return; }
+    const r = placeFlex(v.code, 'core', k);
+    if(r.key){ R.dbl.push(k); R.coreNotes[k] = {kind:'double', flex:r.key}; }
+    else { R.noFree.push(k); R.coreNotes[k] = {kind:'full', flex:c.f}; }
+  });
+  FLEX_ORDER.forEach(k => {
+    const a = R.flexAssign[k]; if(!a || a.source !== 'manual' || !a.code) return;
+    const c = courseOf(a.code); if(!c || c.s !== 1) return;
+    const cat = String(c.k);
+    const eq = equivOf(a.code);
+    const inCore = Object.values(R.coreCount).some(x => x.code === a.code || (eq && x.code === eq)) || (R.sixth && R.sixth.code === a.code);
+    if(inCore) return;
+    if(!R.coreCount[cat] && !state.core[cat].code && Object.keys(R.coreCount).length < 5){
+      R.coreCount[cat] = {code:a.code, source:'flex', flex:k}; R.dbl.push(cat); R.coreNotes[cat] = {kind:'fromflex', flex:k};
+    } else {
+      R.flexNotes[k] = {kind:'coreFull', cat};
+    }
+  });
+  if(R.sixth){ const r = placeFlex(R.sixth.code, 'sixth', R.sixth.cat); R.sixthFlex = r.key; }
+  state.elec.forEach((e, i) => { if(!e.code) return; const r = placeFlex(e.code, 'elec', i); R.elecNotes[i] = r.key ? {kind:'flex', flex:r.key} : null; });
+
+  R.freed = Math.min(5, R.dbl.length) * 3;
+  R.elecAllowed = R.freed / 3 - (R.sixth ? 1 : 0);
+  R.coreMet = Object.keys(R.coreCount).length;
+  R.flexMet = FLEX_ORDER.filter(k => R.flexAssign[k]).length;
+  R.elecUsed = state.elec.filter(e => e.code).length;
+  return R;
+}
+
+/* ===================== COURSE ENTRY (auto-placement) ===================== */
+function inPlan(code){
+  const eq = equivOf(code);
+  return R.picked.has(code) || (eq && R.picked.has(eq));
+}
+/* returns {ok, where} and mutates state; caller re-renders */
+function placeCourse(code, status, term){
+  const c = courseOf(code);
+  if(!c) return {ok:false, where:'Not part of the Program Core, Flexible Core, or Liberal Arts Electives lists', kind:'bad'};
+  R = compute();
+  if(inPlan(code)) return {ok:false, where:'Already in the plan', kind:'dup'};
+  const pick = {code, status, term};
+  const elecOpen = () => R.elecAllowed > R.elecUsed;
+  const flexOpen = () => c.f && (!R.flexAssign[c.f] ? c.f : (!R.flexAssign.ADD ? 'ADD' : null));
+  const putElec = () => { let i = state.elec.findIndex(e => !e.code); if(i < 0){ state.elec.push({code:'',status:'',term:''}); i = state.elec.length - 1; } Object.assign(state.elec[i], pick); return 'Elective ' + (i+1) + (c.f ? ' (also counts for Flexible Core ' + c.f + ' if open)' : ''); };
+  const putFlex = k => { Object.assign(state.flex[k], pick, {other:null}); return 'Flexible Core ' + (k === 'ADD' ? 'additional course (' + c.f + ')' : k); };
+  if(c.s === 1){
+    const cat = String(c.k);
+    if(!state.core[cat].code && !R.coreCount[cat]){
+      Object.assign(state.core[cat], pick, {order: state.seq++});
+      const n = Object.keys(R.coreCount).length;
+      return {ok:true, where:'Program Core ' + cat + ' (' + CAT1[cat] + ')' + (n >= 5 ? ', sixth category, counts as an elective' : (c.f ? ', also counts for Flexible Core ' + c.f : ''))};
+    }
+    if(elecOpen()) return {ok:true, where:putElec() + '; Program Core ' + CAT1[cat] + ' is already filled'};
+    const k = flexOpen(); if(k) return {ok:true, where:putFlex(k) + '; Program Core ' + CAT1[cat] + ' is already filled'};
+    return {ok:false, where:'Program Core ' + CAT1[cat] + ' is filled, no elective credits are free, and ' + (c.f ? 'Flexible Core ' + c.f + ' is filled' : 'it has no Flexible Core code'), kind:'bad'};
+  }
+  if(c.s === 2){
+    if(elecOpen()) return {ok:true, where:putElec()};
+    const k = flexOpen(); if(k) return {ok:true, where:putFlex(k) + '; no elective credits are free'};
+    return {ok:false, where:'No elective credits are free' + (c.f ? ' and Flexible Core ' + c.f + ' is filled' : ' and it has no Flexible Core code'), kind:'bad'};
+  }
+  const k = flexOpen(); if(k) return {ok:true, where:putFlex(k)};
+  return {ok:false, where:'Flexible Core ' + c.f + ' and the additional row are both filled', kind:'bad'};
+}
+function parseCodes(text){
+  const out = []; const re = /\b([A-Z]{3})\s?-?\s?(\d{3}[A-Z]?)\b/gi; let m;
+  while((m = re.exec(text))){ const code = (m[1] + m[2]).toUpperCase(); if(!out.includes(code)) out.push(code); }
+  return out;
+}
+let entryStatus = '';
+function addCodes(codes){
+  const term = document.getElementById('entryTerm').value.trim();
+  const log = [];
+  codes.forEach(code => { const r = placeCourse(code, entryStatus, term); log.push({code, ...r}); });
+  render();
+  const el = document.getElementById('entryLog');
+  if(!log.length){ el.innerHTML = '<span class="muted">No course codes found.</span>'; return; }
+  el.innerHTML = '<ul>' + log.map(l => { const c = courseOf(l.code); return `<li><b>${esc(l.code)}</b><span class="where${l.ok?'':' '+(l.kind||'bad')}">${l.ok?'Added to ':''}${esc(l.where)}${c&&l.ok?' · '+esc(c.t):''}</span></li>`; }).join('') + '</ul>';
+}
+function renderEntryStatus(){ document.getElementById('entryStatus').innerHTML = statusPill(entryStatus, 'data-st-entry="1"'); }
+/* autocomplete */
+let acItems = [], acIdx = -1;
+function acRender(q){
+  const list = document.getElementById('acList');
+  q = q.trim().toLowerCase();
+  if(!q){ list.classList.remove('open'); acItems = []; return; }
+  const qq = q.replace(/\s+/g,'');
+  acItems = RAW.filter(c => c.c.toLowerCase().startsWith(qq) || c.t.toLowerCase().includes(q) || (c.al && c.al.toLowerCase().includes(qq)))
+    .sort((a,b) => (b.c.toLowerCase().startsWith(qq) - a.c.toLowerCase().startsWith(qq)) || (a.s===0) - (b.s===0) || a.c.localeCompare(b.c)).slice(0, 12);
+  acIdx = -1;
+  list.innerHTML = acItems.length ? acItems.map((c,i) => `<div data-i="${i}"><b>${c.c}</b><span class="t">${esc(c.t)}</span>${c.f?`<span class="pill flex">${c.f}</span>`:''}<span class="pill ${c.s===1?'core':c.s===2?'elec':'none'}">${c.s===1?'Core '+c.k:c.s===2?'Elective':'Flex only'}</span></div>`).join('') : '<div class="none">No matching course in the Program Core, elective, or Flexible Core lists.</div>';
+  list.classList.add('open');
+}
+let acSelected = null;
+function acPick(i){ const c = acItems[i]; if(!c) return; acSelected = c; const inp = document.getElementById('acInput'); inp.value = c.c + ' ' + c.t; inp.classList.add('picked'); document.getElementById('acList').classList.remove('open'); acItems = []; acIdx = -1; }
+function acClear(){ acSelected = null; const inp = document.getElementById('acInput'); inp.value = ''; inp.classList.remove('picked'); }
+function addFromEntry(){
+  const inp = document.getElementById('acInput');
+  if(acSelected){ const code = acSelected.c; acClear(); addCodes([code]); inp.focus(); return; }
+  if(acIdx >= 0){ acPick(acIdx); return; }
+  if(acItems.length === 1){ acPick(0); return; }
+  const codes = parseCodes(inp.value);
+  if(codes.length && courseOf(codes[0])){ acClear(); document.getElementById('acList').classList.remove('open'); addCodes([codes[0]]); inp.focus(); }
+  else inp.focus();
+}
+
+/* ===================== RENDER ===================== */
+let R = null;
+function render(){
+  R = compute();
+  renderStats(); renderCore(); renderFlex(); renderElec(); renderSug(); save();
+}
+function statusPill(val, attrs, disabled){
+  const lbl = val || 'Status';
+  return `<button type="button" class="spill ${SCLASS[val]||''}" ${attrs||''}${disabled?' disabled':''}>${ICON[val]||ICON['']}<span>${esc(lbl)}</span></button>`;
+}
+function renderStats(){
+  const elecTotal = Math.max(0, R.elecAllowed);
+  const over = R.elecUsed > elecTotal;
+  const allCodes = [];
+  Object.values(R.coreCount).forEach(x => allCodes.push(x.code));
+  if(R.sixth) allCodes.push(R.sixth.code);
+  FLEX_ORDER.forEach(k => { const a = R.flexAssign[k]; if(a && a.code && !allCodes.includes(a.code)) allCodes.push(a.code); });
+  state.elec.forEach(e => e.code && !allCodes.includes(e.code) && allCodes.push(e.code));
+  const st = {Completed:0,'In Progress':0,Planned:0,'':0};
+  allCodes.forEach(code => { st[statusOf(code)]++; });
+  document.getElementById('stats').innerHTML =
+    `<div class="stat"><div class="num">${R.coreMet}<small> / 5</small></div><div class="lbl">Program Core</div><div class="sub">${R.coreMet>=5?'Requirement met':(5-R.coreMet)+' more categor'+(5-R.coreMet===1?'y':'ies')}</div></div>
+     <div class="stat teal"><div class="num">${R.flexMet}<small> / 6</small></div><div class="lbl">Flexible Core</div><div class="sub">${R.flexMet>=6?'Requirement met':(6-R.flexMet)+' more course'+(6-R.flexMet===1?'':'s')}</div></div>
+     <div class="stat gold"><div class="num">${R.freed}<small> / 15</small></div><div class="lbl">Elective credits freed</div><div class="sub">${R.dbl.length} double-count${R.dbl.length===1?'':'s'}${R.dbl.length>5?' (max 5 count)':''}</div></div>
+     <div class="stat ink"><div class="num">${R.elecUsed}<small> / ${elecTotal}</small></div><div class="lbl">Electives chosen</div><div class="sub">${over?'More electives than freed credits':(R.sixth?'1 slot used by 6th Program Core course':'')}</div></div>
+     <div class="stat ink"><div class="num">${st.Completed}<small> done</small></div><div class="lbl">Course status</div><div class="sub">${st['In Progress']} in progress · ${st.Planned} planned${st['']?' · '+st['']+' no status':''}</div></div>`;
+}
+function isBlocked(code, exceptCode){
+  if(code === exceptCode) return false;
+  const eq = equivOf(code);
+  return R.picked.has(code) || (eq && R.picked.has(eq) && eq !== exceptCode);
+}
+function optionsFor(list, current, groupName){
+  let h = groupName ? `<optgroup label="${esc(groupName)}">` : '';
+  list.forEach(c => { const dis = isBlocked(c.c, current); h += `<option value="${c.c}"${c.c===current?' selected':''}${dis?' disabled':''}>${esc(label(c))}${dis?' (already in plan)':''}</option>`; });
+  return h + (groupName ? '</optgroup>' : '');
+}
+function statusCell(code){ return `<div class="rstatus">${statusPill(statusOf(code), `data-st="${esc(code)}"`, !code)}</div>`; }
+function termCell(code){ return `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(termOf(code))}" data-term="${esc(code)}"${code?'':' disabled'}>`; }
+function infoBtn(code){ return `<button class="ibtn" title="Course details" data-info="${esc(code)}"${code?'':' disabled'}>i</button>`; }
+function pv(code, extra){ const c = courseOf(code); const s = statusOf(code), t = termOf(code); return `<div class="pv">${c ? esc(label(c)) : (extra||'<i>Not chosen</i>')}${s?' · '+esc(s):''}${t?' · '+esc(t):''}</div>`; }
+
+function renderCore(){
+  const rows = document.getElementById('coreRows'); let h = '';
+  const callouts = [];
+  Object.keys(CAT1).forEach(k => {
+    const v = state.core[k]; const note = R.coreNotes[k]; const cc = R.coreCount[k];
+    const auto = cc && cc.source === 'flex';
+    const code = v.code || (auto ? cc.code : '');
+    const isSixth = R.sixth && R.sixth.cat === k;
+    const c1 = S1.filter(c => String(c.k) === k && !c.sub), c1b = S1.filter(c => String(c.k) === k && c.sub);
+    let opts = `<option value="">Not yet chosen</option>` + (c1b.length ? optionsFor(c1, code, 'Taught in the language') + optionsFor(c1b, code, 'Taught in English') : optionsFor(c1, code));
+    let tags = '';
+    if(code){
+      const c = courseOf(code);
+      if(isSixth){ tags += `<span class="badge warn">6th category: counts as elective</span>`; if(R.sixthFlex) tags += `<span class="badge info">Also fills Flex Core ${flexName(R.sixthFlex)}</span>`; }
+      else if(auto) tags += `<span class="badge info">Filled from Flexible Core ${flexName(cc.flex)} pick</span><span class="badge info">Frees 3 credits</span>`;
+      else if(note && note.kind === 'double') tags += `<span class="badge info">Also meets Flex Core ${note.flex==='ADD'?'additional ('+c.f+')':note.flex}</span><span class="badge info">Frees 3 credits</span>`;
+      else if(note && note.kind === 'full') tags += `<span class="badge warn">${c.f} already met twice: frees no credits</span>`;
+      else if(note && note.kind === 'nocode') tags += `<span class="badge muted">No Flex Core code</span>`;
+    }
+    h += `<div class="req${code?' done':''}" data-cat="${k}">
+      <div class="rl">${k}. ${esc(CAT1[k])}${CAT1_LONG[k]?`<small>${esc(CAT1_LONG[k])}</small>`:''}</div>
+      <div class="rmain"><select class="ctl${auto?' auto':''}" data-core="${k}">${opts}</select>${pv(code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+      ${statusCell(code)}${termCell(code)}
+      ${infoBtn(code)}
+    </div>`;
+  });
+  rows.innerHTML = h;
+  if(R.sixth && R.freed/3 - 1 < 0) callouts.push(`<div class="callout red">All six categories are filled but no elective credits have been freed. The sixth course (${esc(R.sixth.code)}) has no room in the major plan unless another pick frees credits.</div>`);
+  else if(R.sixth) callouts.push(`<div class="callout">All six categories are filled. Only five are required, so ${esc(R.sixth.code)} (chosen last) is treated as an elective using 3 freed credits.</div>`);
+  if(R.noFree.length) callouts.push(`<div class="callout">${R.noFree.length===1?'One course':R.noFree.length+' courses'} in Program Core can't double-count because its Flexible Core category is already filled twice. Consider a course with a different code to free more credits.</div>`);
+  document.getElementById('coreCallouts').innerHTML = callouts.join('');
+  const p = document.getElementById('progCore'); p.textContent = `${R.coreMet} of 5`; p.classList.toggle('done', R.coreMet >= 5);
+}
+
+function renderFlex(){
+  const rows = document.getElementById('flexRows'); let h = '';
+  FLEX_ORDER.forEach(k => {
+    const m = state.flex[k]; const a = R.flexAssign[k];
+    const auto = a && a.source !== 'manual';
+    const code = a ? a.code : '';
+    const isOther = !!(m.other) && !m.code;
+    const name = k === 'ADD' ? 'Additional course' : FLEX[k];
+    const sub = k === 'ADD' ? 'Any Flexible Core category' : '';
+    let opts = `<option value="">Not yet chosen</option>`;
+    if(k === 'ADD'){
+      Object.keys(FLEX).forEach(f => { const lst = RAW.filter(c => c.f === f).sort((x,y) => (y.s - x.s) || x.c.localeCompare(y.c)); opts += optionsFor(lst, code, f + ': ' + FLEX[f]); });
+    } else {
+      opts += optionsFor(S1.filter(c => c.f === k), code, 'Program Core courses (count for both)');
+      opts += optionsFor(S2.filter(c => c.f === k), code, 'Liberal Arts electives (Section 2)');
+      opts += optionsFor(FLEXONLY.filter(c => c.f === k), code, 'Other Flexible Core courses');
+    }
+    opts += `<option value="__other"${isOther?' selected':''}>Other course not listed…</option>`;
+    let tags = '';
+    if(a){
+      const c = courseOf(code);
+      if(a.source === 'core') tags += `<span class="badge info">Filled from Program Core: ${esc(CAT1[a.cat])}</span><span class="badge info">Frees 3 credits</span>`;
+      else if(a.source === 'sixth') tags += `<span class="badge info">From 6th Program Core course</span>`;
+      else if(a.source === 'elec') tags += `<span class="badge info">From elective ${a.cat+1}</span>`;
+      else if(a.source === 'manual' && c && c.s === 1){
+        const cat = String(c.k);
+        if(R.coreCount[cat] && R.coreCount[cat].code === code) tags += `<span class="badge info">Also fills Program Core: ${esc(CAT1[cat])}</span><span class="badge info">Frees 3 credits</span>`;
+        else if(a.via === 'core') tags += `<span class="badge info">Also in Program Core</span><span class="badge info">Frees 3 credits</span>`;
+        else tags += `<span class="badge warn">Program Core ${esc(CAT1[cat])} already filled: counts here only</span>`;
+      }
+      else if(a.source === 'manual' && c && c.s === 2) tags += `<span class="badge muted">Section 2 course: counts for Flex Core only unless also chosen as an elective</span>`;
+      if(k === 'ADD' && c && c.f) tags += `<span class="badge muted">${c.f}: ${esc(FLEX[c.f])}</span>`;
+      if(a.source === 'manual' && c && c.f && k !== 'ADD' && c.f !== k) tags += `<span class="badge danger">Not a ${k} course</span>`;
+    }
+    const otherBox = isOther ? `<div class="other-box"><input type="text" class="ctl" placeholder="Code" value="${esc(m.other.code||'')}" data-flex-other-code="${k}"><input type="text" class="ctl" placeholder="Course title" value="${esc(m.other.title||'')}" data-flex-other-title="${k}"></div>` : '';
+    const printExtra = isOther ? esc((m.other.code||'')+' '+(m.other.title||'')) + ' (not in list)' : '';
+    const filled = !!(a);
+    /* "other" rows keep their own status/term on the flex pick */
+    const stCell = isOther ? `<div class="rstatus">${statusPill(m.status||'', `data-st-flex="${k}"`)}</div>` : statusCell(code);
+    const tmCell = isOther ? `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(m.term||'')}" data-term-flex="${k}">` : termCell(code);
+    h += `<div class="req${filled?' done':''}">
+      <div class="rl"><span class="code">${k==='ADD'?'+1':k}</span><br>${esc(name)}${sub?`<small>${esc(sub)}</small>`:''}</div>
+      <div class="rmain"><select class="ctl${auto?' auto':''}" data-flex="${k}">${opts}</select>${otherBox}${isOther?`<div class="pv">${printExtra}${m.status?' · '+esc(m.status):''}${m.term?' · '+esc(m.term):''}</div>`:pv(code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+      ${stCell}${tmCell}
+      ${infoBtn(code)}
+    </div>`;
+  });
+  rows.innerHTML = h;
+  let co = '';
+  if(R.flexMet >= 6) co = `<div class="callout green">Flexible Core complete.</div>`;
+  document.getElementById('flexCallouts').innerHTML = co;
+  const p = document.getElementById('progFlex'); p.textContent = `${R.flexMet} of 6`; p.classList.toggle('done', R.flexMet >= 6);
+}
+
+function renderElec(){
+  const rows = document.getElementById('elecRows');
+  const allowed = Math.max(0, R.elecAllowed);
+  const n = Math.max(allowed, state.elec.filter(e => e.code).length);
+  while(state.elec.length > n && !state.elec[state.elec.length-1].code) state.elec.pop();
+  while(state.elec.length < n) state.elec.push({code:'',status:'',term:''});
+  let h = '';
+  const sixthNote = R.sixth ? `<div class="callout">3 of the ${R.freed} freed credits are used by the sixth Program Core course, ${esc(R.sixth.code)}, so one fewer elective row appears here.</div>` : '';
+  if(n === 0){
+    rows.innerHTML = `<div class="empty-row">No elective credits freed yet. Choose Program Core courses marked with a Flexible Core code (CE, IS, SW, US, WC) to free up to 15 credits.</div>`;
+    document.getElementById('elecHead').style.display = 'none';
+  } else {
+    document.getElementById('elecHead').style.display = '';
+    state.elec.forEach((e, i) => {
+      const over = i >= allowed;
+      const note = R.elecNotes[i];
+      let opts = `<option value="">Not yet chosen</option>` + optionsFor(S1, e.code, 'Section I: Program Core courses') + optionsFor(S2.filter(c => c.k === 'E'), e.code, 'Section 2: English Department') + optionsFor(S2.filter(c => c.k === 'H'), e.code, 'Section 2: Humanities Department') + optionsFor(S2.filter(c => c.k === 'S'), e.code, 'Section 2: Social Science Department');
+      let tags = '';
+      if(over) tags += `<span class="badge danger">No freed credits for this elective</span>`;
+      if(e.code){ const c = courseOf(e.code); if(note) tags += `<span class="badge info">Also fills Flex Core ${note.flex==='ADD'?'additional ('+c.f+')':note.flex}</span>`; else if(c && c.f) tags += `<span class="badge muted">${c.f} already met</span>`; }
+      h += `<div class="req${e.code?' done':''}">
+        <div class="rl">Elective ${i+1}<small>3 freed credits</small></div>
+        <div class="rmain"><select class="ctl" data-elec="${i}">${opts}</select>${pv(e.code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+        ${statusCell(e.code)}${termCell(e.code)}
+        ${infoBtn(e.code)}
+      </div>`;
+    });
+    rows.innerHTML = h;
+  }
+  document.getElementById('elecCallouts').innerHTML = sixthNote + (R.freed >= 15 ? `<div class="callout green">Maximum of 15 elective credits freed.</div>` : '');
+  const p = document.getElementById('progElec'); p.textContent = `${R.freed} credits freed`; p.classList.toggle('done', R.freed >= 15);
+}
+
+function renderSug(){
+  const body = document.getElementById('sugBody');
+  const openFlex = ['WC','US','SW','IS','CE'].filter(k => !R.flexAssign[k]);
+  const needAdd = !R.flexAssign.ADD;
+  const openCats = Object.keys(CAT1).filter(k => !R.coreCount[k] && !state.core[k].code);
+  if(R.coreMet >= 5 || (!openFlex.length && !needAdd)){
+    body.innerHTML = `<div class="empty-state">${R.coreMet>=5?'Program Core is complete, so no further double-counts are possible.':'Flexible Core is complete.'}</div>`; return;
+  }
+  const chipsFor = (list, showCode) => {
+    let h = '';
+    openCats.forEach(k => {
+      const sub = list.filter(c => String(c.k) === k); if(!sub.length) return;
+      const chip = c => `<span class="chip" data-add="${c.c}" data-cat="${k}" title="Add to Program Core"><b>${c.c}</b> ${esc(c.t)}${showCode?`<span class="fc">${c.f}</span>`:''}</span>`;
+      const show = sub.slice(0, 8), rest = sub.slice(8);
+      h += `<div class="sug-group">${k}. ${esc(CAT1[k])} · ${sub.length}</div><div class="chips">` + show.map(chip).join('') +
+        (rest.length ? `<span class="chip more" data-more="1">+${rest.length} more</span><span class="chips-rest" style="display:none">` + rest.map(chip).join('') + `</span>` : '') + `</div>`;
+    });
+    return h;
+  };
+  let h = '';
+  openFlex.forEach(f => {
+    const list = S1.filter(c => c.f === f && openCats.includes(String(c.k)));
+    if(!list.length) return;
+    h += `<div class="sug-cat"><h4>${f}: ${esc(FLEX[f])}</h4>${chipsFor(list, false)}</div>`;
+  });
+  if(needAdd){
+    /* courses whose code category is already filled: they would land in the additional row */
+    const filledFlex = Object.keys(FLEX).filter(f => R.flexAssign[f]);
+    const list = S1.filter(c => c.f && filledFlex.includes(c.f) && openCats.includes(String(c.k)));
+    if(list.length) h += `<div class="sug-cat"><h4>+1: Additional course (any category)</h4><div class="sug-group" style="margin-top:0">Courses whose Flexible Core category is already filled; they would go to the additional row.</div>${chipsFor(list, true)}</div>`;
+    else if(!filledFlex.length) h += `<div class="sug-cat"><h4>+1: Additional course (any category)</h4><div class="sug-group" style="margin-top:0">Any second course in a Flexible Core category fills this row once that category is met.</div></div>`;
+  }
+  body.innerHTML = h || `<div class="empty-state">No Program Core courses are available for the open categories.</div>`;
+}
+
+/* ===================== COURSE LISTS ===================== */
+function listName(c){ return c.s === 1 ? '1 · ' + CAT1[c.k] : c.s === 2 ? '2 · ' + CAT2[c.k] : 'Flex Core only'; }
+function renderLists(){
+  const q = document.getElementById('lsSearch').value.trim().toLowerCase();
+  const sec = document.getElementById('lsSection').value;
+  const cat = document.getElementById('lsCat').value;
+  const fx = document.getElementById('lsFlex').value;
+  let list = RAW.slice().sort((a,b) => (a.s===0) - (b.s===0) || (a.s - b.s) || String(a.k).localeCompare(String(b.k)) || a.c.localeCompare(b.c));
+  if(sec === '') list = list.filter(c => c.s !== 0); else if(sec !== 'all') list = list.filter(c => String(c.s) === sec);
+  if(cat) list = list.filter(c => String(c.k) === cat);
+  if(fx === 'has') list = list.filter(c => c.f); else if(fx === 'none') list = list.filter(c => !c.f); else if(fx) list = list.filter(c => c.f === fx);
+  if(q) list = list.filter(c => (c.c + ' ' + c.t + ' ' + (c.al||'')).toLowerCase().includes(q));
+  document.getElementById('lsCount').innerHTML = `Showing <b>${list.length}</b> course${list.length===1?'':'s'}`;
+  document.getElementById('lsBody').innerHTML = list.map(c => `<tr>
+    <td style="white-space:nowrap"><b style="color:var(--ink)">${c.c}</b>${c.al?`<br><span class="muted" style="font-size:11.5px">sheet: ${esc(c.al)}</span>`:''}</td>
+    <td>${esc(c.t)}${c.sub?`<br><span class="muted" style="font-size:11.5px">${esc(c.sub)}</span>`:''}</td>
+    <td><span class="pill ${c.s===1?'core':c.s===2?'elec':'flex'}">${c.s===1?'Core':c.s===2?'Elective':'Flex'}</span><br><span style="font-size:12px">${esc(listName(c))}</span></td>
+    <td>${c.f?`<span class="pill flex" title="${esc(FLEX[c.f])}">${c.f}</span>${c.fs==='catalog'&&c.s?'<br><span class="muted" style="font-size:11px">per catalog</span>':''}`:'<span class="pill none">none</span>'}</td>
+    <td class="num">${c.cr!=null?c.cr:'<span class="muted">?</span>'}</td>
+    <td style="font-size:12.5px;max-width:320px">${c.p?esc(c.p):'<span class="muted">None listed</span>'}</td>
+    <td>${c.id?`<a href="${CATALOG}${c.id}" target="_blank" rel="noopener">Catalog ↗</a>`:'<span class="muted">n/a</span>'}</td>
+  </tr>`).join('') || `<tr><td colspan="7" class="empty-state">No courses match.</td></tr>`;
+}
+function fillCatFilter(){
+  const sel = document.getElementById('lsCat');
+  sel.innerHTML = `<option value="">All categories</option>` + Object.keys(CAT1).map(k => `<option value="${k}">Section I · ${k}. ${esc(CAT1[k])}</option>`).join('') + Object.keys(CAT2).map(k => `<option value="${k}">Section 2 · ${esc(CAT2[k])}</option>`).join('');
+}
+
+/* ===================== POPOVER ===================== */
+function showInfo(btn, code){
+  const c = courseOf(code); const pop = document.getElementById('pop'); if(!c){ pop.classList.remove('open'); return; }
+  let flexLine = c.f ? `${c.f}: ${esc(FLEX[c.f])}` : 'None';
+  let src = c.fs === 'catalog' && c.s ? `Flexible Core designation comes from the catalog table; the program sheet shows no code for this course.` : '';
+  if(c.al) src += (src?' ':'') + `Listed on the program sheet as ${esc(c.al)}.`;
+  if(c.eq) src += (src?' ':'') + `Cross-listed with ${esc(c.eq)}; the planner treats them as one course.`;
+  if(c.nocat) src += (src?' ':'') + `Not found in the catalog table, so credits and prerequisites are unavailable.`;
+  document.getElementById('popBody').innerHTML = `<div class="pc">${c.c}${c.s===1?' · Program Core: '+esc(CAT1[c.k]):c.s===2?' · Section 2: '+esc(CAT2[c.k]):' · Flexible Core'}</div><h3>${esc(c.t)}</h3>
+    <dl><dt>Credits</dt><dd>${c.cr!=null?c.cr:'Unknown'}</dd>
+    <dt>Flex Core</dt><dd>${flexLine}</dd>
+    <dt>Pre/Co-req</dt><dd>${c.p?esc(c.p):'None listed'}</dd>
+    ${c.id?`<dt>Catalog</dt><dd><a href="${CATALOG}${c.id}" target="_blank" rel="noopener">Open course description ↗</a></dd>`:''}</dl>
+    ${src?`<div class="src">${src}</div>`:''}`;
+  const r = btn.getBoundingClientRect();
+  pop.classList.add('open');
+  const w = pop.offsetWidth;
+  let left = r.right + window.scrollX - w; if(left < 10) left = 10;
+  pop.style.top = (r.bottom + window.scrollY + 6) + 'px'; pop.style.left = left + 'px';
+}
+document.getElementById('popClose').addEventListener('click', () => document.getElementById('pop').classList.remove('open'));
+
+/* ===================== STATUS MENU ===================== */
+let menuTarget = null;
+function openStatusMenu(btn){
+  const menu = document.getElementById('smenu');
+  menuTarget = btn;
+  menu.innerHTML = STATUSES.map(s => `<button type="button" data-set="${s}">${ICON[s]}${s}</button>`).join('') + `<button type="button" class="clear" data-set="">Clear status</button>`;
+  menu.classList.add('open');
+  const r = btn.getBoundingClientRect();
+  let left = r.left + window.scrollX; if(left + menu.offsetWidth > window.scrollX + window.innerWidth - 10) left = window.scrollX + window.innerWidth - menu.offsetWidth - 10;
+  menu.style.top = (r.bottom + window.scrollY + 4) + 'px'; menu.style.left = left + 'px';
+}
+function applyStatus(val){
+  const d = menuTarget.dataset;
+  document.getElementById('smenu').classList.remove('open');
+  if(d.stEntry !== undefined){ entryStatus = val; renderEntryStatus(); return; }
+  if(d.stFlex !== undefined){ state.flex[d.stFlex].status = val; render(); return; }
+  if(d.st !== undefined){ setStatus(d.st, val); render(); }
+}
+document.getElementById('smenu').addEventListener('click', e => { const b = e.target.closest('button[data-set]'); if(b) applyStatus(b.dataset.set); });
+document.addEventListener('click', e => {
+  if(!e.target.closest('#pop') && !e.target.closest('.ibtn')) document.getElementById('pop').classList.remove('open');
+  if(!e.target.closest('#smenu') && !e.target.closest('.spill')) document.getElementById('smenu').classList.remove('open');
+  if(!e.target.closest('.ac-wrap')) document.getElementById('acList').classList.remove('open');
+});
+
+/* ===================== EVENTS ===================== */
+const plan = document.getElementById('view-plan');
+plan.addEventListener('change', e => {
+  const t = e.target; const d = t.dataset;
+  if(d.core !== undefined){ const v = state.core[d.core]; v.code = t.value; v.order = t.value ? state.seq++ : 0; if(!t.value){ v.status=''; v.term=''; } }
+  else if(d.flex !== undefined){ const m = state.flex[d.flex]; if(t.value === '__other'){ m.code=''; m.other = m.other || {code:'',title:''}; } else { m.code = t.value; m.other = null; if(!t.value){ m.status=''; m.term=''; } } }
+  else if(d.flexOtherCode !== undefined){ state.flex[d.flexOtherCode].other.code = t.value; save(); return; }
+  else if(d.flexOtherTitle !== undefined){ state.flex[d.flexOtherTitle].other.title = t.value; save(); return; }
+  else if(d.termFlex !== undefined){ state.flex[d.termFlex].term = t.value; save(); return; }
+  else if(d.term !== undefined){ setTerm(d.term, t.value); render(); return; }
+  else if(d.elec !== undefined){ const e2 = state.elec[+d.elec]; e2.code = t.value; if(!t.value){ e2.status=''; e2.term=''; } }
+  else if(t.id === 'stName'){ state.student.name = t.value; save(); return; }
+  else if(t.id === 'stId'){ state.student.id = t.value; save(); return; }
+  else if(t.id === 'stAdvisor'){ state.student.advisor = t.value; save(); return; }
+  else if(t.id === 'stDate'){ state.student.date = t.value; save(); return; }
+  else if(t.id === 'stNotes'){ state.notes = t.value; save(); return; }
+  else return;
+  render();
+});
+plan.addEventListener('click', e => {
+  const sp = e.target.closest('.spill'); if(sp && !sp.disabled){ e.preventDefault(); if(menuTarget === sp && document.getElementById('smenu').classList.contains('open')) document.getElementById('smenu').classList.remove('open'); else openStatusMenu(sp); return; }
+  const ib = e.target.closest('.ibtn'); if(ib){ e.preventDefault(); showInfo(ib, ib.dataset.info); return; }
+  const more = e.target.closest('.chip.more'); if(more){ more.style.display='none'; more.nextElementSibling.style.display='contents'; return; }
+  const add = e.target.closest('.chip[data-add]'); if(add){ const k = add.dataset.cat; const v = state.core[k]; if(!v.code){ v.code = add.dataset.add; v.order = state.seq++; v.status = ''; v.term = ''; render(); document.getElementById('panelCore').scrollIntoView({behavior:'smooth', block:'start'}); } return; }
+});
+/* course entry events */
+const acInput = document.getElementById('acInput');
+acInput.addEventListener('input', () => { if(acSelected){ acSelected = null; acInput.classList.remove('picked'); } acRender(acInput.value); });
+acInput.addEventListener('focus', () => { if(acInput.value.trim()) acRender(acInput.value); });
+acInput.addEventListener('keydown', e => {
+  const list = document.getElementById('acList');
+  if(e.key === 'ArrowDown'){ e.preventDefault(); acIdx = Math.min(acItems.length-1, acIdx+1); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); acIdx = Math.max(0, acIdx-1); }
+  else if(e.key === 'Enter'){ e.preventDefault(); addFromEntry(); return; }
+  else if(e.key === 'Escape'){ list.classList.remove('open'); return; }
+  else return;
+  list.querySelectorAll('div[data-i]').forEach((d,i) => d.classList.toggle('hi', i === acIdx));
+});
+document.getElementById('acList').addEventListener('mousedown', e => { const d = e.target.closest('div[data-i]'); if(d){ e.preventDefault(); acPick(+d.dataset.i); } });
+document.getElementById('btnAddOne').addEventListener('click', addFromEntry);
+document.getElementById('pasteToggle').addEventListener('click', () => { const r = document.getElementById('pasteRow'); r.style.display = r.style.display === 'none' ? '' : 'none'; });
+document.getElementById('btnAddMany').addEventListener('click', () => { const box = document.getElementById('pasteBox'); const codes = parseCodes(box.value); addCodes(codes); if(codes.length) box.value = ''; });
+
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById('view-' + b.dataset.view).classList.add('active');
+  if(b.dataset.view === 'lists') renderLists();
+}));
+['lsSearch','lsSection','lsCat','lsFlex'].forEach(id => document.getElementById(id).addEventListener('input', renderLists));
+document.getElementById('lsClear').addEventListener('click', () => { ['lsSearch','lsSection','lsCat','lsFlex'].forEach(id => document.getElementById(id).value=''); renderLists(); });
+
+document.getElementById('btnPrint').addEventListener('click', () => { document.getElementById('notesPrint').textContent = state.notes; window.print(); });
+document.getElementById('btnExport').addEventListener('click', () => {
+  const data = Object.assign({app:'LaGuardia Liberal Arts Course Planner', version:'Prototype', exported:new Date().toISOString()}, state);
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'Liberal Arts Plan' + (state.student.name ? ' - ' + state.student.name.replace(/[^\w ,.-]+/g,'') : '') + '.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileImport').click());
+document.getElementById('fileImport').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { try{ const o = JSON.parse(rd.result); if(!o || !o.core || !o.flex) throw new Error('bad'); state = Object.assign(blankState(), {student:o.student||{}, core:o.core, flex:o.flex, elec:o.elec||[], notes:o.notes||'', seq:o.seq||1}); FLEX_ORDER.forEach(k => { if(!state.flex[k]) state.flex[k] = {code:'',status:'',term:'',other:null}; }); Object.keys(CAT1).forEach(k => { if(!state.core[k]) state.core[k] = {code:'',status:'',term:'',order:0}; }); fillStudent(); render(); } catch(err){ alert('That file is not a plan exported from this app.'); } };
+  rd.readAsText(f); e.target.value = '';
+});
+document.getElementById('btnClear').addEventListener('click', () => { if(confirm('Clear the whole plan, including student info and notes?')){ state = blankState(); fillStudent(); document.getElementById('entryLog').innerHTML = ''; render(); } });
+
+function fillStudent(){ document.getElementById('stName').value = state.student.name||''; document.getElementById('stId').value = state.student.id||''; document.getElementById('stAdvisor').value = state.student.advisor||''; document.getElementById('stDate').value = state.student.date||''; document.getElementById('stNotes').value = state.notes||''; }
+
+/* ===================== INIT ===================== */
+load(); fillCatFilter(); fillStudent(); renderEntryStatus(); render();
+</script>
+</body>
+</html>
