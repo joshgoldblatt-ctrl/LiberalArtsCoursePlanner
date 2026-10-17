@@ -30,6 +30,9 @@
       freed credits and does not itself free credits.
     - Electives with a Flexible Core code fill an open Flexible Core row but
       free no further credits.
+    - Compact planner rows: filled rows are shaded; a per-row details toggle
+      (teal / gold / red by severity) opens a line explaining where the course
+      came from, what else it fills, whether it frees credits, and warnings.
     - Per-course status pill (blank by default; Planned = empty box,
       In Progress = box with squiggle, Completed = green checked box) and a
       term field. Status and term belong to the course, so they can be edited
@@ -207,25 +210,33 @@ header{padding:38px 0 0}
 .entry-log li .where.dup{color:var(--gold-deep)}
 .entry-toggle{font-size:12.5px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:var(--font-body);font-weight:600;padding:0}
 /* requirement rows */
-.req{display:grid;grid-template-columns:minmax(150px,200px) minmax(220px,1fr) 140px 118px 34px;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.req{display:grid;grid-template-columns:minmax(150px,210px) minmax(220px,1fr) 128px 112px 28px 28px;gap:8px;align-items:center;padding:5px 10px;margin:0 -10px;border-top:1px solid var(--line);border-radius:8px}
 .req:first-of-type{border-top:none}
-.req .rl{font-weight:600;font-size:14px;line-height:1.3}
-.req .rl small{display:block;font-weight:500;color:var(--ink-faint);font-size:12px}
-.req .rl .code{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--teal);text-transform:uppercase}
+.req.done{background:var(--paper)}
+.req .rl{font-weight:600;font-size:13.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.req .rl .code{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-faint);text-transform:uppercase;margin-right:5px}
 .req .rmain{min-width:0}
-.req .rtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.req select.ctl.auto{background:var(--teal-soft);border-color:var(--teal-soft);color:var(--teal);font-weight:600}
-.req.done .rl{color:var(--teal)}
-.req .ibtn{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s}
-.req .ibtn:hover{border-color:var(--accent);color:var(--accent)}
-.req .ibtn[disabled]{opacity:.3;cursor:default}
+.req select.ctl,.req input.ctl{padding:5px 9px;font-size:13.5px}
+.req .rtags{display:flex;flex-wrap:wrap;gap:6px}
+.req .rdet{grid-column:1 / -1;display:none;padding:2px 0 4px;font-size:12.5px;color:var(--ink-soft)}
+.req.open .rdet{display:block}
+.req .rdet .rtags{margin-top:4px}
+.req .ibtn,.req .dbtn{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-family:var(--font-display);font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s;padding:0}
+.req .ibtn:hover,.req .dbtn:hover{border-color:var(--accent);color:var(--accent)}
+.req .ibtn[disabled],.req .dbtn[disabled]{opacity:.3;cursor:default}
+.req .dbtn{font-family:var(--font-body);font-size:11px}
+.req .dbtn.has{border-color:var(--teal);color:var(--teal)}
+.req .dbtn.warn{border-color:var(--gold);background:var(--gold-soft);color:var(--gold-deep)}
+.req .dbtn.danger{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.req.open .dbtn .ch{display:inline-block;transform:rotate(90deg)}
+.req .dbtn .ch{display:inline-block;transition:transform .15s}
 .req .pv{display:none}
-.other-box{display:grid;grid-template-columns:120px 1fr;gap:8px;margin-top:8px}
+.other-box{display:grid;grid-template-columns:120px 1fr;gap:8px;margin-top:6px}
 @media (max-width:860px){
-  .req{grid-template-columns:1fr 1fr;grid-template-areas:"lbl lbl" "main main" "status term" "info info"}
-  .req .rl{grid-area:lbl}.req .rmain{grid-area:main}.req .rstatus{grid-area:status}.req .rterm{grid-area:term}.req .ibtn{grid-area:info;justify-self:start}
+  .req{grid-template-columns:1fr 1fr auto auto;grid-template-areas:"lbl lbl lbl lbl" "main main main main" "status term info det" "det2 det2 det2 det2"}
+  .req .rl{grid-area:lbl;white-space:normal}.req .rmain{grid-area:main}.req .rstatus{grid-area:status}.req .rterm{grid-area:term}.req .ibtn{grid-area:info}.req .dbtn{grid-area:det}.req .rdet{grid-area:det2}
 }
-.rowhead{display:grid;grid-template-columns:minmax(150px,200px) minmax(220px,1fr) 140px 118px 34px;gap:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);padding:0 0 6px}
+.rowhead{display:grid;grid-template-columns:minmax(150px,210px) minmax(220px,1fr) 128px 112px 28px 28px;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);padding:0 0 6px}
 @media (max-width:860px){.rowhead{display:none}}
 .empty-row{font-size:14px;color:var(--ink-faint);font-style:italic;padding:8px 0}
 .callout{border-left:4px solid var(--gold);background:var(--gold-soft);color:var(--gold-deep);border-radius:8px;padding:10px 14px;font-size:13.5px;margin:10px 0 14px}
@@ -279,9 +290,10 @@ header{padding:38px 0 0}
   .no-print,.tabs,.toolbar,.ibtn,.filterbar,.chips,.callout.teal,.ac,.smenu{display:none !important}
   .view{display:none}.view.active{display:block}
   .panel,.stat,.table-wrap{box-shadow:none;break-inside:avoid}
-  .req{grid-template-columns:150px 1fr 110px 90px 0;padding:5px 0}
-  .req select.ctl,.req input.ctl,.req .other-box{display:none}
+  .req{grid-template-columns:150px 1fr 110px 90px 0 0;padding:4px 0;margin:0;background:none !important}
+  .req select.ctl,.req input.ctl,.req .other-box,.req .dbtn{display:none}
   .req .pv{display:block;font-size:12px}
+  .req .rdet{display:block;font-size:11px}
   .spill{border-style:solid}
   .stat .num{font-size:24px}
   header{padding-top:0}
@@ -357,17 +369,17 @@ header{padding:38px 0 0}
         <div class="prog" id="progCore"></div>
       </div>
       <div id="coreCallouts"></div>
-      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span><span></span></div>
       <div id="coreRows"></div>
     </div>
 
     <div class="panel" id="panelFlex">
       <div class="panel-head">
-        <div><h2>Pathways Flexible Core</h2><div class="note">Six courses: one from each of the five categories plus one more from any category. Rows filled automatically from a Program Core pick are shaded teal; you can choose a different course for any row.</div></div>
+        <div><h2>Pathways Flexible Core</h2><div class="note">Six courses: one from each of the five categories plus one more from any category. Rows the planner fills from a Program Core pick can still be changed; open a row's details (▸) to see where its course came from.</div></div>
         <div class="prog" id="progFlex"></div>
       </div>
       <div id="flexCallouts"></div>
-      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div class="rowhead"><span>Category</span><span>Course</span><span>Status</span><span>Term</span><span></span><span></span></div>
       <div id="flexRows"></div>
     </div>
 
@@ -377,7 +389,7 @@ header{padding:38px 0 0}
         <div class="prog" id="progElec"></div>
       </div>
       <div id="elecCallouts"></div>
-      <div class="rowhead" id="elecHead"><span>Elective</span><span>Course</span><span>Status</span><span>Term</span><span></span></div>
+      <div class="rowhead" id="elecHead"><span>Elective</span><span>Course</span><span>Status</span><span>Term</span><span></span><span></span></div>
       <div id="elecRows"></div>
     </div>
 
@@ -451,12 +463,13 @@ header{padding:38px 0 0}
       </ul>
       <h3 style="margin-bottom:8px">What the planner does automatically</h3>
       <ol>
-        <li>When a Program Core course carries a Flexible Core code, the matching Flexible Core row fills in (teal shading). If that category is already filled, the course goes to the <i>Additional course</i> row instead. If both are full, the course still counts for the major but frees no credits, and the row says so.</li>
+        <li>When a Program Core course carries a Flexible Core code, the matching Flexible Core row fills in. If that category is already filled, the course goes to the <i>Additional course</i> row instead. If both are full, the course still counts for the major but frees no credits, and the row says so.</li>
         <li>Each double-count adds an elective row. If you change a pick and lose a freed credit, any elective you already chose stays on the plan with a warning rather than disappearing.</li>
         <li>If you pick a Section I course directly in a Flexible Core row, the planner also fills the matching Program Core category when it is open.</li>
         <li>If you fill all six Program Core categories, the sixth course you chose is treated as an elective paid with freed credits. It can fill an open Flexible Core row but frees no credits itself.</li>
         <li>An elective with a Flexible Core code fills an open Flexible Core row but frees no further credits.</li>
         <li>A course can appear only once in the plan. Cross-listed pairs (ENN193/SSN193, ENG238/HUV238) count as one course.</li>
+        <li>A filled row is shaded. The ▸ button at the end of a row opens a line that says how the course counts: where it came from, what else it fills, whether it frees credits, and any warnings. The button is teal when there is something to show, gold for a caution, and red for a problem.</li>
       </ol>
       <h3 style="margin-bottom:8px">Status and term</h3>
       <p>Each course has a status pill (blank until set) and a term. Click the pill to choose Planned, In Progress, or Completed, or to clear it. Status and term belong to the course, so a course that appears in two rows shows the same values in both and can be edited from either.</p>
@@ -707,6 +720,13 @@ function optionsFor(list, current, groupName){
 }
 function statusCell(code){ return `<div class="rstatus">${statusPill(statusOf(code), `data-st="${esc(code)}"`, !code)}</div>`; }
 function termCell(code){ return `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(termOf(code))}" data-term="${esc(code)}"${code?'':' disabled'}>`; }
+const openDetails = new Set();
+function detailBtn(key, tags, level){
+  const has = !!tags;
+  return `<button type="button" class="dbtn${has?' '+(level||'has'):''}" title="${has?'Show how this course counts':'No details'}" data-det="${key}"${has?'':' disabled'}><span class="ch">&#9654;</span></button>`;
+}
+function detailLine(tags){ return `<div class="rdet"><span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">In this plan</span><div class="rtags">${tags}</div></div>`; }
+function levelOf(tags){ return tags.includes('badge danger') ? 'danger' : tags.includes('badge warn') ? 'warn' : 'has'; }
 function infoBtn(code){ return `<button class="ibtn" title="Course details" data-info="${esc(code)}"${code?'':' disabled'}>i</button>`; }
 function pv(code, extra){ const c = courseOf(code); const s = statusOf(code), t = termOf(code); return `<div class="pv">${c ? esc(label(c)) : (extra||'<i>Not chosen</i>')}${s?' · '+esc(s):''}${t?' · '+esc(t):''}</div>`; }
 
@@ -729,11 +749,13 @@ function renderCore(){
       else if(note && note.kind === 'full') tags += `<span class="badge warn">${c.f} already met twice: frees no credits</span>`;
       else if(note && note.kind === 'nocode') tags += `<span class="badge muted">No Flex Core code</span>`;
     }
-    h += `<div class="req${code?' done':''}" data-cat="${k}">
-      <div class="rl">${k}. ${esc(CAT1[k])}${CAT1_LONG[k]?`<small>${esc(CAT1_LONG[k])}</small>`:''}</div>
-      <div class="rmain"><select class="ctl${auto?' auto':''}" data-core="${k}">${opts}</select>${pv(code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+    const key = 'core-' + k;
+    h += `<div class="req${code?' done':''}${openDetails.has(key)?' open':''}" data-cat="${k}">
+      <div class="rl" title="${esc(CAT1_LONG[k]||CAT1[k])}">${k}. ${esc(CAT1[k])}</div>
+      <div class="rmain"><select class="ctl" data-core="${k}">${opts}</select>${pv(code)}</div>
       ${statusCell(code)}${termCell(code)}
-      ${infoBtn(code)}
+      ${infoBtn(code)}${detailBtn(key, tags, tags?levelOf(tags):'')}
+      ${tags?detailLine(tags):''}
     </div>`;
   });
   rows.innerHTML = h;
@@ -784,11 +806,13 @@ function renderFlex(){
     /* "other" rows keep their own status/term on the flex pick */
     const stCell = isOther ? `<div class="rstatus">${statusPill(m.status||'', `data-st-flex="${k}"`)}</div>` : statusCell(code);
     const tmCell = isOther ? `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(m.term||'')}" data-term-flex="${k}">` : termCell(code);
-    h += `<div class="req${filled?' done':''}">
-      <div class="rl"><span class="code">${k==='ADD'?'+1':k}</span><br>${esc(name)}${sub?`<small>${esc(sub)}</small>`:''}</div>
-      <div class="rmain"><select class="ctl${auto?' auto':''}" data-flex="${k}">${opts}</select>${otherBox}${isOther?`<div class="pv">${printExtra}${m.status?' · '+esc(m.status):''}${m.term?' · '+esc(m.term):''}</div>`:pv(code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+    const key = 'flex-' + k;
+    h += `<div class="req${filled?' done':''}${openDetails.has(key)?' open':''}">
+      <div class="rl" title="${esc(name)}${sub?' ('+esc(sub)+')':''}"><span class="code">${k==='ADD'?'+1':k}</span>${esc(name)}</div>
+      <div class="rmain"><select class="ctl" data-flex="${k}">${opts}</select>${otherBox}${isOther?`<div class="pv">${printExtra}${m.status?' · '+esc(m.status):''}${m.term?' · '+esc(m.term):''}</div>`:pv(code)}</div>
       ${stCell}${tmCell}
-      ${infoBtn(code)}
+      ${infoBtn(code)}${detailBtn(key, tags, tags?levelOf(tags):'')}
+      ${tags?detailLine(tags):''}
     </div>`;
   });
   rows.innerHTML = h;
@@ -818,11 +842,13 @@ function renderElec(){
       let tags = '';
       if(over) tags += `<span class="badge danger">No freed credits for this elective</span>`;
       if(e.code){ const c = courseOf(e.code); if(note) tags += `<span class="badge info">Also fills Flex Core ${note.flex==='ADD'?'additional ('+c.f+')':note.flex}</span>`; else if(c && c.f) tags += `<span class="badge muted">${c.f} already met</span>`; }
-      h += `<div class="req${e.code?' done':''}">
-        <div class="rl">Elective ${i+1}<small>3 freed credits</small></div>
-        <div class="rmain"><select class="ctl" data-elec="${i}">${opts}</select>${pv(e.code)}${tags?`<div class="rtags">${tags}</div>`:''}</div>
+      const key = 'elec-' + i;
+      h += `<div class="req${e.code?' done':''}${openDetails.has(key)?' open':''}">
+        <div class="rl" title="3 freed credits">Elective ${i+1}</div>
+        <div class="rmain"><select class="ctl" data-elec="${i}">${opts}</select>${pv(e.code)}</div>
         ${statusCell(e.code)}${termCell(e.code)}
-        ${infoBtn(e.code)}
+        ${infoBtn(e.code)}${detailBtn(key, tags, tags?levelOf(tags):'')}
+        ${tags?detailLine(tags):''}
       </div>`;
     });
     rows.innerHTML = h;
@@ -964,6 +990,7 @@ plan.addEventListener('change', e => {
 plan.addEventListener('click', e => {
   const sp = e.target.closest('.spill'); if(sp && !sp.disabled){ e.preventDefault(); if(menuTarget === sp && document.getElementById('smenu').classList.contains('open')) document.getElementById('smenu').classList.remove('open'); else openStatusMenu(sp); return; }
   const ib = e.target.closest('.ibtn'); if(ib){ e.preventDefault(); showInfo(ib, ib.dataset.info); return; }
+  const db = e.target.closest('.dbtn'); if(db && !db.disabled){ e.preventDefault(); const key = db.dataset.det; const row = db.closest('.req'); if(openDetails.has(key)) openDetails.delete(key); else openDetails.add(key); row.classList.toggle('open', openDetails.has(key)); return; }
   const more = e.target.closest('.chip.more'); if(more){ more.style.display='none'; more.nextElementSibling.style.display='contents'; return; }
   const add = e.target.closest('.chip[data-add]'); if(add){ const k = add.dataset.cat; const v = state.core[k]; if(!v.code){ v.code = add.dataset.add; v.order = state.seq++; v.status = ''; v.term = ''; render(); document.getElementById('panelCore').scrollIntoView({behavior:'smooth', block:'start'}); } return; }
 });
