@@ -26,6 +26,9 @@
       Note column (SSN180 -> HUN180, BTC105 -> SSD105) and retired codes
       (HUC150/270/238/240 -> HUV..., ENG208 -> ENG219) resolve to the current
       code when pasted and when an older saved plan is loaded.
+    - Term is a dropdown (Fall 2026 through Fall 2029, plus Other with a free
+      text box for earlier or transfer terms) on every row and in Add courses.
+    - Suggestions list only recently offered courses.
     - HUA196 carries a "pending approval" note in the popover.
     - Credits from the CUNYfirst file; pre/co-requisites from the Degree Map
       Prereq table (Aug 2026); catalog links from the Course Link Table
@@ -241,6 +244,8 @@ header{padding:38px 0 0}
 .req .rmain{min-width:0}
 .req select.ctl,.req input.ctl{padding:5px 9px;font-size:13.5px}
 .req .rtags{display:flex;flex-wrap:wrap;gap:6px}
+.termwrap{display:flex;flex-direction:column;gap:4px;min-width:0}
+.termwrap .rtermx{font-size:12.5px;padding:4px 8px}
 .req .rdet{grid-column:1 / -1;display:none;padding:2px 0 4px;font-size:12.5px;color:var(--ink-soft)}
 .req.open .rdet{display:block}
 .req .rdet .rtags{margin-top:4px}
@@ -375,7 +380,7 @@ header{padding:38px 0 0}
       <div class="entry-grid">
         <div class="field ac-wrap"><label>Course</label><input type="text" id="acInput" placeholder="Type a course code or title…" autocomplete="off"><div class="ac" id="acList"></div></div>
         <div class="field"><label>Status</label><div id="entryStatus"></div></div>
-        <div class="field"><label>Term</label><input type="text" id="entryTerm" placeholder="e.g., Fall 2026"></div>
+        <div class="field"><label>Term</label><div id="entryTermWrap"></div></div>
         <div class="field"><label>&nbsp;</label><button class="btn btn-primary" id="btnAddOne">Add course</button></div>
       </div>
       <div style="margin-top:12px"><button class="entry-toggle" id="pasteToggle">Paste a list of courses instead…</button></div>
@@ -420,7 +425,7 @@ header{padding:38px 0 0}
 
     <div class="panel no-print" id="panelSug">
       <h2>Suggestions</h2>
-      <div class="note">Program Core courses that would fill the Flexible Core rows still open, grouped by Program Core category not yet used. Click a course to add it to the plan.</div>
+      <div class="note">Recently offered Program Core courses that would fill the Flexible Core rows still open, grouped by Program Core category not yet used. Click a course to add it to the plan.</div>
       <div id="sugBody"></div>
     </div>
 
@@ -509,7 +514,7 @@ header{padding:38px 0 0}
       <h3 style="margin-bottom:8px">Saving, sharing, printing</h3>
       <p>The plan saves itself in this browser as you work. Use <b>Export plan</b> to download a file you can email to a student or advisor, and <b>Import plan</b> to load one. <b>Print plan</b> produces a clean summary.</p>
       <h3 style="margin-bottom:8px">Recently offered</h3>
-      <p>Each course is marked by whether it had at least one non-cancelled section in the Fall 2026 schedule, the Spring 2027 schedule, both, or neither. Courses with no sections in either term are labeled "Not recently offered" and sort to the bottom of every dropdown, the Suggestions panel, and the Course Lists tab. A course that is not recently offered can still be chosen; the label is a planning aid, not a rule.</p>
+      <p>Each course is marked by whether it had at least one non-cancelled section in the Fall 2026 schedule, the Spring 2027 schedule, both, or neither. Courses with no sections in either term are labeled "Not recently offered", sort to the bottom of every dropdown and of the Course Lists tab, and are left out of the Suggestions panel. A course that is not recently offered can still be chosen; the label is a planning aid, not a rule.</p>
       <h3 style="margin-bottom:8px">Data sources and notes</h3>
       <ul>
         <li>Course list, categories, titles, and Flexible Core codes: Liberal Arts Elective Table (revised October 2026), with titles and Pathways designations taken from the CUNYfirst course file.</li>
@@ -542,6 +547,12 @@ const CAT2 = {E:'Additional elective - English',H:'Additional elective - Humanit
 const FLEX = {WC:'World Cultures & Global Issues',US:'U.S. Experience in Its Diversity',SW:'Scientific World',IS:'Individual & Society',CE:'Creative Expression'};
 const FLEX_ORDER = ['WC','US','SW','IS','CE','ADD'];
 const STATUSES = ['Planned','In Progress','Completed'];
+const TERMS = ['Fall 2026','Spring 2027','Fall 2027','Spring 2028','Fall 2028','Spring 2029','Fall 2029'];
+/* term control: dropdown of upcoming terms plus Other (free text). attrs go on both controls; data-term* on the select, data-termx* on the text box */
+function termSel(val, attrs, disabled){
+  const other = val && !TERMS.includes(val);
+  return `<div class="termwrap"><select class="ctl rterm" ${attrs}${disabled?' disabled':''}><option value="">Term…</option>${TERMS.map(x => `<option${x===val?' selected':''}>${x}</option>`).join('')}<option value="__other"${other?' selected':''}>Other…</option></select>${other?`<input type="text" class="ctl rtermx" placeholder="e.g., Spring 2026" value="${esc(val)}" ${attrs.replace('data-term','data-termx')}>`:''}</div>`;
+}
 const CATALOG = 'https://laguardia.catalog.cuny.edu/courses/';
 const STORE_KEY = 'lagcc-la-planner-v1';
 /* recently offered first, then by code */
@@ -693,7 +704,7 @@ function parseCodes(text){
 }
 let entryStatus = '';
 function addCodes(codes){
-  const term = document.getElementById('entryTerm').value.trim();
+  const term = entryTerm;
   const log = [];
   codes.forEach(code => { const cc = canon(code); const r = placeCourse(cc, entryStatus, term); log.push({code: cc === code ? code : code + ' → ' + cc, ...r, code2: cc}); });
   render();
@@ -702,6 +713,9 @@ function addCodes(codes){
   el.innerHTML = '<ul>' + log.map(l => { const c = courseOf(l.code2); return `<li><b>${esc(l.code)}</b><span class="where${l.ok?'':' '+(l.kind||'bad')}">${l.ok?'Added to ':''}${esc(l.where)}${c&&l.ok?' · '+esc(c.t):''}</span></li>`; }).join('') + '</ul>';
 }
 function renderEntryStatus(){ document.getElementById('entryStatus').innerHTML = statusPill(entryStatus, 'data-st-entry="1"'); }
+let entryTerm = '';
+function renderEntryTerm(){ document.getElementById('entryTermWrap').innerHTML = termSel(entryTerm, 'data-term-entry="1"'); }
+document.getElementById('entryTermWrap').addEventListener('change', e => { const d = e.target.dataset; if(d.termEntry !== undefined){ entryTerm = e.target.value === '__other' ? 'Other' : e.target.value; renderEntryTerm(); if(e.target.value === '__other'){ const x = document.querySelector('#entryTermWrap .rtermx'); if(x) x.focus(); } } else if(d.termxEntry !== undefined){ entryTerm = e.target.value.trim() || 'Other'; } });
 /* autocomplete */
 let acItems = [], acIdx = -1;
 function acRender(q){
@@ -766,7 +780,7 @@ function optionsFor(list, current, groupName){
   return h + (groupName ? '</optgroup>' : '');
 }
 function statusCell(code){ return `<div class="rstatus">${statusPill(statusOf(code), `data-st="${esc(code)}"`, !code)}</div>`; }
-function termCell(code){ return `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(termOf(code))}" data-term="${esc(code)}"${code?'':' disabled'}>`; }
+function termCell(code){ return termSel(termOf(code), `data-term="${esc(code)}"`, !code); }
 const openDetails = new Set();
 function detailBtn(key, tags, level){
   const has = !!tags;
@@ -852,7 +866,7 @@ function renderFlex(){
     const filled = !!(a);
     /* "other" rows keep their own status/term on the flex pick */
     const stCell = isOther ? `<div class="rstatus">${statusPill(m.status||'', `data-st-flex="${k}"`)}</div>` : statusCell(code);
-    const tmCell = isOther ? `<input type="text" class="ctl rterm" placeholder="e.g., Fall 2026" value="${esc(m.term||'')}" data-term-flex="${k}">` : termCell(code);
+    const tmCell = isOther ? termSel(m.term||'', `data-term-flex="${k}"`) : termCell(code);
     const key = 'flex-' + k;
     h += `<div class="req${filled?' done':''}${openDetails.has(key)?' open':''}">
       <div class="rl" title="${esc(name)}${sub?' ('+esc(sub)+')':''}"><span class="code">${k==='ADD'?'+1':k}</span>${esc(name)}</div>
@@ -915,7 +929,7 @@ function renderSug(){
   const chipsFor = (list, showCode) => {
     let h = '';
     openCats.forEach(k => {
-      const sub = list.filter(c => String(c.k) === k); if(!sub.length) return;
+      const sub = list.filter(c => String(c.k) === k && c.of); if(!sub.length) return;
       const chip = c => `<span class="chip${c.of?'':' noff'}" data-add="${c.c}" data-cat="${k}" title="${c.of?'Add to Program Core · '+esc(OFFER[c.of]):'Not recently offered (no sections in Fall 2026 or Spring 2027)'}"><b>${c.c}</b> ${esc(c.t)}${showCode?`<span class="fc">${c.f}</span>`:''}</span>`;
       const show = sub.slice(0, 8), rest = sub.slice(8);
       h += `<div class="sug-group">${k}. ${esc(CAT1[k])} · ${sub.length}</div><div class="chips">` + show.map(chip).join('') +
@@ -925,14 +939,14 @@ function renderSug(){
   };
   let h = '';
   openFlex.forEach(f => {
-    const list = S1.filter(c => c.f === f && openCats.includes(String(c.k)));
+    const list = S1.filter(c => c.f === f && c.of && openCats.includes(String(c.k)));
     if(!list.length) return;
     h += `<div class="sug-cat"><h4>${f}: ${esc(FLEX[f])}</h4>${chipsFor(list, false)}</div>`;
   });
   if(needAdd){
     /* courses whose code category is already filled: they would land in the additional row */
     const filledFlex = Object.keys(FLEX).filter(f => R.flexAssign[f]);
-    const list = S1.filter(c => c.f && filledFlex.includes(c.f) && openCats.includes(String(c.k)));
+    const list = S1.filter(c => c.f && c.of && filledFlex.includes(c.f) && openCats.includes(String(c.k)));
     if(list.length) h += `<div class="sug-cat"><h4>+1: Additional course (any category)</h4><div class="sug-group" style="margin-top:0">Courses whose Flexible Core category is already filled; they would go to the additional row.</div>${chipsFor(list, true)}</div>`;
     else if(!filledFlex.length) h += `<div class="sug-cat"><h4>+1: Additional course (any category)</h4><div class="sug-group" style="margin-top:0">Any second course in a Flexible Core category fills this row once that category is met.</div></div>`;
   }
@@ -1028,8 +1042,10 @@ plan.addEventListener('change', e => {
   else if(d.flex !== undefined){ const m = state.flex[d.flex]; if(t.value === '__other'){ m.code=''; m.other = m.other || {code:'',title:''}; } else { m.code = t.value; m.other = null; if(!t.value){ m.status=''; m.term=''; } } }
   else if(d.flexOtherCode !== undefined){ state.flex[d.flexOtherCode].other.code = t.value; save(); return; }
   else if(d.flexOtherTitle !== undefined){ state.flex[d.flexOtherTitle].other.title = t.value; save(); return; }
-  else if(d.termFlex !== undefined){ state.flex[d.termFlex].term = t.value; save(); return; }
-  else if(d.term !== undefined){ setTerm(d.term, t.value); render(); return; }
+  else if(d.termFlex !== undefined){ state.flex[d.termFlex].term = t.value === '__other' ? 'Other' : t.value; }
+  else if(d.termxFlex !== undefined){ state.flex[d.termxFlex].term = t.value.trim() || 'Other'; save(); return; }
+  else if(d.term !== undefined){ setTerm(d.term, t.value === '__other' ? 'Other' : t.value); }
+  else if(d.termx !== undefined){ setTerm(d.termx, t.value.trim() || 'Other'); save(); return; }
   else if(d.elec !== undefined){ const e2 = state.elec[+d.elec]; e2.code = t.value; if(!t.value){ e2.status=''; e2.term=''; } }
   else if(t.id === 'stName'){ state.student.name = t.value; save(); return; }
   else if(t.id === 'stId'){ state.student.id = t.value; save(); return; }
@@ -1092,7 +1108,7 @@ document.getElementById('btnClear').addEventListener('click', () => { if(confirm
 function fillStudent(){ document.getElementById('stName').value = state.student.name||''; document.getElementById('stId').value = state.student.id||''; document.getElementById('stAdvisor').value = state.student.advisor||''; document.getElementById('stDate').value = state.student.date||''; document.getElementById('stNotes').value = state.notes||''; }
 
 /* ===================== INIT ===================== */
-load(); fillCatFilter(); fillStudent(); renderEntryStatus(); render();
+load(); fillCatFilter(); fillStudent(); renderEntryStatus(); renderEntryTerm(); render();
 </script>
 </body>
 </html>
